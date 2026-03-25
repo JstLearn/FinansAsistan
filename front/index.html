@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>FinansAsistan</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="shortcut icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(0, 123, 255, 0.5) rgba(255, 255, 255, 0.07 );
+        }
+
+        *::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        *::-webkit-scrollbar-track {
+            background-color: rgba(255, 255, 255, 0.07 );
+            border-radius: 4px;
+        }
+
+        *::-webkit-scrollbar-thumb {
+            background-color: rgba(0, 123, 255, 0.5);
+            border-radius: 10px;
+            border: 2px solid rgba(26, 31, 37, 0.8);
+            transition: background-color 0.3s ease;
+        }
+
+        *::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(0, 123, 255, 0.7);
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1f25;
+            height: 100%;
+            width: 100%;
+            color-scheme: dark;
+        }
+
+        @keyframes glow {
+            0% {
+                text-shadow: 0 4px 12px rgba(0,123,255,0.3), 0 2px 6px rgba(0,0,0,0.6), 0 0 20px rgba(0,123,255,0.15);
+            }
+            100% {
+                text-shadow: 0 4px 12px rgba(0,123,255,0.45), 0 2px 6px rgba(0,0,0,0.6), 0 0 35px rgba(0,123,255,0.25);
+            }
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        /* Form Field Animations */
+        @keyframes slideInFromRight {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes expandFromButtonLeft {
+            0% {
+                opacity: 0;
+                transform: scale(0.3) translateX(-200px) translateY(0);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) translateX(0) translateY(0);
+            }
+        }
+
+        @keyframes expandFromButtonRight {
+            0% {
+                opacity: 0;
+                transform: scale(0.3) translateX(200px) translateY(0);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) translateX(0) translateY(0);
+            }
+        }
+
+        @keyframes shrinkToButtonLeft {
+            0% {
+                opacity: 1;
+                transform: scale(1) translateX(0) translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.3) translateX(-200px) translateY(0);
+            }
+        }
+
+        @keyframes shrinkToButtonRight {
+            0% {
+                opacity: 1;
+                transform: scale(1) translateX(0) translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.3) translateX(200px) translateY(0);
+            }
+        }
+
+        .sub-buttons-enter-left {
+            animation: expandFromButtonLeft 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        .sub-buttons-enter-right {
+            animation: expandFromButtonRight 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        .sub-buttons-exit-left {
+            animation: shrinkToButtonLeft 0.35s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards;
+        }
+
+        .sub-buttons-exit-right {
+            animation: shrinkToButtonRight 0.35s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards;
+        }
+
+        @keyframes containerFadeIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.95) translateY(20px);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .container-enter {
+            animation: containerFadeIn 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        @keyframes mainButtonsAppear {
+            0% {
+                opacity: 0;
+                transform: scale(0.1) translateY(50px);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .main-buttons-enter {
+            animation: mainButtonsAppear 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+
+        .form-field-enter {
+            animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        .form-field-enter-delay-1 {
+            animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s forwards;
+            opacity: 0;
+        }
+
+        .form-field-enter-delay-2 {
+            animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards;
+            opacity: 0;
+        }
+
+        .form-field-enter-delay-3 {
+            animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards;
+            opacity: 0;
+        }
+
+        .form-field-enter-delay-4 {
+            animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.4s forwards;
+            opacity: 0;
+        }
+
+        .form-field-enter-delay-5 {
+            animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.5s forwards;
+            opacity: 0;
+        }
+
+        /* Animasyon yeniden tetiklenmesi için */
+        @keyframes fadeInUpReset {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 3D Buton Hover Efektleri */
+        .main-button-3d:hover {
+            transform: translateY(-8px) scale(1.05) !important;
+            box-shadow: 0 25px 50px rgba(0,123,255,0.6), 0 10px 25px rgba(0,123,255,0.4), 0 0 40px rgba(0,123,255,0.3), inset 0 -2px 8px rgba(0,0,0,0.2), inset 0 2px 8px rgba(255,255,255,0.2) !important;
+            background: linear-gradient(135deg, #0056b3 0%, #003d82 100%) !important;
+        }
+
+        .main-button-3d:active {
+            transform: translateY(-4px) scale(0.98) !important;
+            box-shadow: 0 8px 20px rgba(0,123,255,0.4), inset 0 4px 12px rgba(0,0,0,0.3) !important;
+            background: linear-gradient(135deg, #003d82 0%, #002557 100%) !important;
+        }
+
+        .sub-button-3d:hover {
+            transform: translateY(-5px) scale(1.03) !important;
+            box-shadow: 0 15px 35px rgba(108,117,125,0.5), 0 5px 15px rgba(0,0,0,0.3), 0 0 25px rgba(108,117,125,0.3), inset 0 -1px 5px rgba(0,0,0,0.2), inset 0 1px 5px rgba(255,255,255,0.2) !important;
+            background: linear-gradient(135deg, rgba(73, 80, 87, 1) 0%, rgba(52, 58, 64, 1) 100%) !important;
+        }
+
+        .sub-button-3d:active {
+            transform: translateY(-2px) scale(0.98) !important;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3), inset 0 3px 8px rgba(0,0,0,0.3) !important;
+            background: linear-gradient(135deg, rgba(52, 58, 64, 1) 0%, rgba(33, 37, 41, 1) 100%) !important;
+        }
+
+        .form-submit-3d:hover {
+            transform: translateY(-4px) scale(1.05) !important;
+            box-shadow: 0 15px 35px rgba(40,167,69,0.6), 0 5px 15px rgba(0,0,0,0.3), 0 0 30px rgba(40,167,69,0.4) !important;
+            background: linear-gradient(135deg, #1e7e34 0%, #155724 100%) !important;
+        }
+
+        .form-submit-3d:active {
+            transform: translateY(-2px) scale(0.98) !important;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3), inset 0 3px 8px rgba(0,0,0,0.3) !important;
+        }
+
+        /* Login/Modal Butonları */
+        .login-button-3d:hover {
+            transform: translateY(-3px) scale(1.03) !important;
+            box-shadow: 0 12px 30px rgba(0,123,255,0.5), 0 4px 12px rgba(0,0,0,0.3), 0 0 20px rgba(0,123,255,0.3) !important;
+            background: linear-gradient(135deg, #0056b3 0%, #003d82 100%) !important;
+        }
+
+        .login-button-3d:active {
+            transform: translateY(-1px) scale(0.98) !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3), inset 0 2px 6px rgba(0,0,0,0.3) !important;
+        }
+
+        /* Input Focus Efekti */
+        input:focus, textarea:focus {
+            outline: none !important;
+            border-color: rgba(0,123,255,0.6) !important;
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.25), inset 0 2px 6px rgba(0,0,0,0.3), 0 4px 16px rgba(0,123,255,0.3) !important;
+            transform: translateY(-1px) !important;
+        }
+
+        /* Date Picker Dark Theme - Agresif Stil */
+        input[type="date"] {
+            color-scheme: dark !important;
+            background-color: rgba(30, 35, 45, 0.9) !important;
+            color: #fff !important;
+            display: flex !important;
+            align-items: center !important;
+            font-family: "Kalam", "Comic Sans MS", cursive, sans-serif !important;
+            border: clamp(1px, 0.2vw, 2px) solid rgba(0,123,255,0.2) !important;
+            border-radius: clamp(6px, 1.2vw, 12px) !important;
+            padding: clamp(6px, 1.2vw, 12px) !important;
+            height: clamp(32px, 4.5vw, 45px) !important;
+            box-sizing: border-box !important;
+            box-shadow: inset 0 clamp(1px, 0.2vw, 2px) clamp(2px, 0.4vw, 4px) rgba(0,0,0,0.1), 0 clamp(1px, 0.2vw, 2px) clamp(4px, 0.8vw, 8px) rgba(0,123,255,0.1) !important;
+            transition: all 0.3s ease !important;
+        }
+
+        /* İçinde tarih varsa yeşil glow */
+        input[type="date"][data-has-value="true"] {
+            border-color: rgba(40, 167, 69, 0.3) !important;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1), 0 2px 8px rgba(40,167,69,0.2), 0 0 12px rgba(40,167,69,0.15) !important;
+        }
+
+        /* Date input focus çerçevesini kaldır - border ve glow korunacak */
+        input[type="date"] {
+            outline: none !important;
+        }
+
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1) brightness(1.2) !important;
+            cursor: pointer !important;
+            background-color: transparent !important;
+            margin-left: 4px !important;
+            margin-right: 0 !important;
+            padding: 0 !important;
+            flex-shrink: 0 !important;
+            width: 16px !important;
+            height: 16px !important;
+        }
+        
+        /* Tablo date input'lardaki takvim ikonunu küçült */
+        input.table-date-input[type="date"]::-webkit-calendar-picker-indicator {
+            width: 14px !important;
+            height: 14px !important;
+        }
+
+        /* Date picker içindeki tüm elementler */
+        input[type="date"]::-webkit-datetime-edit {
+            color: #fff !important;
+            background-color: transparent !important;
+            font-family: "Kalam", "Comic Sans MS", cursive, sans-serif !important;
+        }
+
+        input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+            color: #fff !important;
+            background-color: transparent !important;
+        }
+
+        input[type="date"]::-webkit-datetime-edit-text {
+            color: rgba(255, 255, 255, 0.7) !important;
+        }
+
+        input[type="date"]::-webkit-datetime-edit-day-field,
+        input[type="date"]::-webkit-datetime-edit-month-field,
+        input[type="date"]::-webkit-datetime-edit-year-field {
+            color: #fff !important;
+            background-color: transparent !important;
+            padding: 3px 3px !important;
+            border-radius: 4px !important;
+            cursor: text !important;
+            font-family: "Kalam", "Comic Sans MS", cursive, sans-serif !important;
+        }
+
+        input[type="date"]::-webkit-datetime-edit-day-field:focus,
+        input[type="date"]::-webkit-datetime-edit-month-field:focus,
+        input[type="date"]::-webkit-datetime-edit-year-field:focus {
+            background-color: rgba(0, 123, 255, 0.6) !important;
+            color: rgba(255, 255, 255, 0.5) !important;
+            outline: 2px solid rgba(0, 123, 255, 0.8) !important;
+            outline-offset: -1px !important;
+            box-shadow: 0 0 8px rgba(0, 123, 255, 0.4) !important;
+        }
+
+        /* Tarayıcının kendi text seçim stilini agresif override et */
+        input[type="date"]::-webkit-datetime-edit-day-field::selection,
+        input[type="date"]::-webkit-datetime-edit-month-field::selection,
+        input[type="date"]::-webkit-datetime-edit-year-field::selection {
+            background-color: rgba(0, 123, 255, 0.85) !important;
+            color: rgba(255, 255, 255, 0.3) !important;
+            text-shadow: 0 0 8px rgba(0, 123, 255, 0.6) !important;
+        }
+
+        input[type="date"]::-webkit-datetime-edit-day-field::-moz-selection,
+        input[type="date"]::-webkit-datetime-edit-month-field::-moz-selection,
+        input[type="date"]::-webkit-datetime-edit-year-field::-moz-selection {
+            background-color: rgba(0, 123, 255, 0.85) !important;
+            color: rgba(255, 255, 255, 0.3) !important;
+        }
+
+        /* JavaScript ile eklenen active class'lar için stiller */
+        input[type="date"].date-day-active::-webkit-datetime-edit-day-field,
+        input[type="date"].date-month-active::-webkit-datetime-edit-month-field,
+        input[type="date"].date-year-active::-webkit-datetime-edit-year-field {
+            background: linear-gradient(135deg, rgba(0, 123, 255, 0.25), rgba(0, 123, 255, 0.35)) !important;
+            color: rgba(255, 255, 255, 0.9) !important;
+            border-radius: 16px !important;
+            box-shadow: 
+                inset 0 1px 3px rgba(0, 0, 0, 0.2),
+                0 0 0 1px rgba(0, 123, 255, 0.4),
+                0 2px 8px rgba(0, 123, 255, 0.2) !important;
+            transition: all 0.2s ease !important;
+        }
+
+        /* Chrome/Edge Date Picker Popup */
+        ::-webkit-calendar-picker-indicator {
+            filter: invert(1) brightness(1.2) !important;
+        }
+
+        /* Floating Label Animation */
+        .formFloatingContainer {
+            position: relative;
+            width: 100%;
+        }
+
+        /* Main Button ve Sub Button Border Radius Fix - Köşe Düzeltmeleri */
+        [style*="mainButton"],
+        [style*="subButton"],
+        .main-button-wrapper,
+        .sub-button-wrapper {
+            overflow: hidden !important;
+            border-radius: inherit !important;
+            /* Border'ların da border-radius ile uyumlu olması için */
+            border-top-left-radius: inherit !important;
+            border-top-right-radius: inherit !important;
+            border-bottom-left-radius: inherit !important;
+            border-bottom-right-radius: inherit !important;
+            /* Background'un köşelerini düzgün render etmek için */
+            background-clip: padding-box !important;
+            /* Smooth rendering için */
+            -webkit-backface-visibility: hidden !important;
+            backface-visibility: hidden !important;
+            -webkit-font-smoothing: antialiased !important;
+            /* Border'ların border-radius ile uyumlu olması için */
+            border-image: none !important;
+            -webkit-border-image: none !important;
+            /* Gradient'in köşelerde düzgün render edilmesi için */
+            background-origin: border-box !important;
+        }
+        
+        /* Main Button Background - Daha agresif selector */
+        [style*="mainButton"] {
+            background: linear-gradient(145deg, #4da3ff 0%, #007bff 45%, #0056b3 75%, #003d82 100%) !important;
+            background-color: #007bff !important;
+        }
+        
+        /* Sub Button Background - Daha agresif selector */
+        [style*="subButton"] {
+            background: linear-gradient(145deg, #8a9199 0%, #6c757d 45%, #495057 75%, #343a40 100%) !important;
+            background-color: #6c757d !important;
+        }
+        
+        /* Main Button Hover */
+        [style*="mainButton"]:hover {
+            background: linear-gradient(135deg, #0056b3 0%, #003d82 100%) !important;
+            background-color: #0056b3 !important;
+        }
+        
+        /* Sub Button Hover */
+        [style*="subButton"]:hover {
+            background: linear-gradient(135deg, rgba(73, 80, 87, 1) 0%, rgba(52, 58, 64, 1) 100%) !important;
+            background-color: #495057 !important;
+        }
+        
+        /* Main Button Active */
+        [style*="mainButton"]:active {
+            background: linear-gradient(135deg, #003d82 0%, #002557 100%) !important;
+            background-color: #003d82 !important;
+        }
+        
+        /* Sub Button Active */
+        [style*="subButton"]:active {
+            background: linear-gradient(135deg, rgba(52, 58, 64, 1) 0%, rgba(33, 37, 41, 1) 100%) !important;
+            background-color: #343a40 !important;
+        }
+        
+        /* Tüm child elementler için border-radius inherit */
+        [style*="mainButton"] *,
+        [style*="subButton"] *,
+        [style*="mainButton"] *::before,
+        [style*="mainButton"] *::after,
+        [style*="subButton"] *::before,
+        [style*="subButton"] *::after {
+            border-radius: inherit !important;
+            border-top-left-radius: inherit !important;
+            border-top-right-radius: inherit !important;
+            border-bottom-left-radius: inherit !important;
+            border-bottom-right-radius: inherit !important;
+        }
+        
+        /* Text elementlerinin border-radius'u inherit etmesi */
+        [style*="mainButtonText"],
+        [style*="subButtonText"] {
+            border-radius: 0 !important;
+        }
+        
+        /* Gradient background'un köşelerini düzelt - isolation layer */
+        [style*="mainButton"],
+        [style*="subButton"] {
+            isolation: isolate !important;
+            will-change: transform !important;
+        }
+
+        /* Hero Title Hover Effect */
+        [style*="heroTitle"] {
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        [style*="heroTitle"]:hover {
+            transform: scale(1.05) !important;
+            text-shadow: 
+                0 0 20px rgba(0, 123, 255, 0.6),
+                0 0 40px rgba(0, 123, 255, 0.4) !important;
+        }
+        
+        [style*="heroTitle"]:active {
+            transform: scale(1.02) !important;
+        }
+
+        /* Logo Animation - Smooth scroll hide/show */
+        [data-logo-container] {
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), 
+                        opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+        }
+
+        /* Table Row Hover Effects */
+        [style*="tableRow"] {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        /* Table Filter Input Hover Effects with Glowing */
+        [style*="filterInput"]:hover,
+        input[style*="filterInput"]:hover {
+            border-color: rgba(0, 123, 255, 0.6) !important;
+            box-shadow: 
+                0 0 8px rgba(0, 123, 255, 0.4),
+                0 0 16px rgba(0, 123, 255, 0.2),
+                inset 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+            filter: brightness(1.1) !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        [style*="filterInput"]:focus,
+        input[style*="filterInput"]:focus {
+            border-color: rgba(0, 123, 255, 0.8) !important;
+            box-shadow: 
+                0 0 12px rgba(0, 123, 255, 0.5),
+                0 0 24px rgba(0, 123, 255, 0.3),
+                inset 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+            filter: brightness(1.15) !important;
+        }
+
+        /* TableWrapper scrollbar yuvarlak köşelere uygun */
+        [style*="tableWrapper"] {
+            position: relative !important;
+        }
+
+        [style*="tableWrapper"]::-webkit-scrollbar {
+            height: 8px !important;
+        }
+
+        [style*="tableWrapper"]::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05) !important;
+            border-radius: 4px !important;
+            margin-left: 15px !important;
+            margin-right: 15px !important;
+        }
+
+        [style*="tableWrapper"]::-webkit-scrollbar-thumb {
+            background: rgba(0, 123, 255, 0.4) !important;
+            border-radius: 4px !important;
+            transition: background 0.3s ease !important;
+        }
+
+        [style*="tableWrapper"]::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 123, 255, 0.6) !important;
+        }
+
+        /* Tablo içindeki date input'ları ortala */
+        [style*="tableWrapper"] input[type="date"],
+        [style*="filterContainer"] input[type="date"],
+        input[type="date"][style*="filterInput"] {
+            text-align: center !important;
+            font-family: "Kalam", "Comic Sans MS", cursive, sans-serif !important;
+        }
+
+        /* Tablo içindeki text input placeholder'larını ortala */
+        [style*="filterInput"]::placeholder {
+            text-align: center !important;
+        }
+
+        /* SADECE tablo date input'larını ortala - ClassName ile */
+        input.table-date-input[type="date"] {
+            text-align: center !important;
+            height: 32px !important;
+            min-height: 32px !important;
+            max-height: 32px !important;
+            box-sizing: border-box !important;
+            padding: 4px 4px !important;
+            line-height: normal !important;
+            font-size: 12px !important;
+            vertical-align: middle !important;
+            font-family: "Kalam", "Comic Sans MS", cursive, sans-serif !important;
+        }
+        
+        /* Tablo date input içindeki elementleri ortala */
+        input.table-date-input[type="date"]::-webkit-datetime-edit {
+            display: flex !important;
+            justify-content: center !important;
+            text-align: center !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            height: 24px !important;
+            line-height: 24px !important;
+            align-items: center !important;
+            font-family: "Kalam", "Comic Sans MS", cursive, sans-serif !important;
+        }
+
+        /* Tablo date input field wrapper'ını ortala */
+        input.table-date-input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+        }
+        
+        /* Tablo date field'larını ortala */
+        input.table-date-input[type="date"]::-webkit-datetime-edit-day-field,
+        input.table-date-input[type="date"]::-webkit-datetime-edit-month-field,
+        input.table-date-input[type="date"]::-webkit-datetime-edit-year-field {
+            text-align: center !important;
+            padding: 3px 3px !important;
+            line-height: 18px !important;
+            vertical-align: middle !important;
+            font-family: "Kalam", "Comic Sans MS", cursive, sans-serif !important;
+        }
+
+        /* Filter Dropdown - Overflow kontrolü */
+        [style*="filterContainer"],
+        [style*="filterOperatorContainer"],
+        [style*="headerCell"] {
+            overflow: visible !important;
+        }
+        
+        /* Dropdown'u en üste çıkar */
+        [style*="filterDropdownContainer"] {
+            z-index: 99999 !important;
+            pointer-events: auto !important;
+        }
+        
+        /* Dropdown item'ları tıklanabilir yap */
+        [style*="filterDropdownItem"] {
+            pointer-events: auto !important;
+            cursor: pointer !important;
+        }
+
+        /* Column Selector Dropdown */
+        [style*="columnSelectorDropdown"] {
+            z-index: 99999 !important;
+            pointer-events: auto !important;
+        }
+        
+        [style*="columnSelectorItem"] {
+            pointer-events: auto !important;
+            cursor: pointer !important;
+        }
+
+        /* Checkbox Hover/Active Effects */
+        /* Checkbox container'lara class ekleyemediğimiz için genel selector kullanacağız */
+        div[role="button"]:hover {
+            transform: translateY(-2px) !important;
+            filter: brightness(1.1) !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        div[role="button"]:active {
+            transform: translateY(0px) scale(0.98) !important;
+            filter: brightness(1.25) !important;
+            transition: all 0.1s ease !important;
+        }
+
+        /* Form Input Hover Effects */
+        input:not([type="date"]):not([type="datetime-local"]):hover:not(:focus),
+        textarea:hover:not(:focus),
+        select:not([style*="position: absolute"]):hover:not(:focus) {
+            transform: translateY(-2px) !important;
+            filter: brightness(1.1) !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        input:not([type="date"]):not([type="datetime-local"]):focus,
+        textarea:focus,
+        select:not([style*="position: absolute"]):focus {
+            transform: translateY(-1px) !important;
+            filter: brightness(1.15) !important;
+        }
+
+        /* Focus + Hover = Focus parlaklığını koru */
+        input:not([type="date"]):not([type="datetime-local"]):focus:hover,
+        textarea:focus:hover,
+        select:not([style*="position: absolute"]):focus:hover {
+            filter: brightness(1.15) !important;
+        }
+
+        input:not([type="date"]):not([type="datetime-local"]):active,
+        textarea:active,
+        select:not([style*="position: absolute"]):active {
+            transform: translateY(0px) scale(0.98) !important;
+            filter: brightness(1.25) !important;
+            box-shadow: 
+                inset 0 clamp(2px, 0.4vw, 4px) clamp(4px, 0.8vw, 8px) rgba(0,0,0,0.2),
+                0 clamp(1px, 0.2vw, 2px) clamp(4px, 0.8vw, 8px) rgba(0,123,255,0.3),
+                0 0 clamp(12px, 2.4vw, 24px) rgba(0,123,255,0.25) !important;
+            transition: all 0.1s ease !important;
+        }
+
+        /* Para birimi dropdown için position: absolute olan select'lerin transform'u sabitle */
+        select[style*="position: absolute"] {
+            will-change: filter, box-shadow !important;
+        }
+
+        /* Date Input Hover Effect */
+        input[type="date"]:hover:not(:focus) {
+            transform: translateY(-2px) !important;
+            filter: brightness(1.1) !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        input[type="date"]:focus {
+            transform: translateY(-1px) !important;
+            filter: brightness(1.15) !important;
+            border-color: rgba(0, 123, 255, 0.5) !important;
+            box-shadow: 
+                0 0 0 clamp(1.5px, 0.3vw, 3px) rgba(0,123,255,0.2),
+                inset 0 clamp(1px, 0.2vw, 2px) clamp(2px, 0.4vw, 4px) rgba(0,0,0,0.1),
+                0 clamp(2px, 0.4vw, 4px) clamp(6px, 1.2vw, 12px) rgba(0,123,255,0.2) !important;
+        }
+
+        /* Focus + Hover = Focus parlaklığını koru */
+        input[type="date"]:focus:hover {
+            filter: brightness(1.15) !important;
+        }
+
+        input[type="date"]:active {
+            transform: translateY(0px) scale(0.98) !important;
+            filter: brightness(1.25) !important;
+            box-shadow: 
+                inset 0 clamp(2px, 0.4vw, 4px) clamp(4px, 0.8vw, 8px) rgba(0,0,0,0.2),
+                0 clamp(1px, 0.2vw, 2px) clamp(4px, 0.8vw, 8px) rgba(0,123,255,0.3),
+                0 0 clamp(12px, 2.4vw, 24px) rgba(0,123,255,0.25) !important;
+            transition: all 0.1s ease !important;
+        }
+        
+        /* Firefox Date Picker */
+        input[type="date"]::-moz-calendar-picker-indicator {
+            filter: invert(1) brightness(1.2) !important;
+        }
+
+        /* DateTime-local input'a global font uygula */
+        input[type="datetime-local"],
+        input[type="datetime-local"]::-webkit-datetime-edit,
+        input[type="datetime-local"]::-webkit-datetime-edit-day-field,
+        input[type="datetime-local"]::-webkit-datetime-edit-month-field,
+        input[type="datetime-local"]::-webkit-datetime-edit-year-field,
+        input[type="datetime-local"]::-webkit-datetime-edit-hour-field,
+        input[type="datetime-local"]::-webkit-datetime-edit-minute-field,
+        input[type="datetime-local"]::-webkit-datetime-edit-ampm-field {
+            font-family: "Kalam", "Comic Sans MS", cursive, sans-serif !important;
+        }
+
+        /* DateTime-local input'un border, padding, height ayarlarını formInput ile eşitle */
+        input[type="datetime-local"] {
+            border: 1px solid rgba(40, 167, 69, 0.3) !important;
+            border-radius: clamp(16px, 3vw, 24px) !important;
+            padding: clamp(8px, 1.5vw, 12px) clamp(12px, 2vw, 16px) !important;
+            height: clamp(32px, 6vw, 48px) !important;
+            box-sizing: border-box !important;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1), 0 2px 8px rgba(40,167,69,0.2), 0 0 12px rgba(40,167,69,0.15) !important;
+        }
+
+        /* DateTime-local input - değer varsa yeşil glow */
+        input[type="datetime-local"][data-has-value="true"] {
+            border-color: rgba(40, 167, 69, 0.3) !important;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1), 0 2px 8px rgba(40,167,69,0.2), 0 0 12px rgba(40,167,69,0.15) !important;
+        }
+
+        /* DateTime-local Input Hover Effect */
+        input[type="datetime-local"]:hover:not(:focus) {
+            transform: translateY(-2px) !important;
+            filter: brightness(1.1) !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        input[type="datetime-local"]:focus {
+            transform: translateY(-1px) !important;
+            filter: brightness(1.15) !important;
+            border-color: rgba(0, 123, 255, 0.5) !important;
+            box-shadow: 
+                0 0 0 clamp(1.5px, 0.3vw, 3px) rgba(0,123,255,0.2),
+                inset 0 clamp(1px, 0.2vw, 2px) clamp(2px, 0.4vw, 4px) rgba(0,0,0,0.1),
+                0 clamp(2px, 0.4vw, 4px) clamp(6px, 1.2vw, 12px) rgba(0,123,255,0.2) !important;
+        }
+
+        /* Focus + Hover = Focus parlaklığını koru */
+        input[type="datetime-local"]:focus:hover {
+            filter: brightness(1.15) !important;
+        }
+
+        input[type="datetime-local"]:active {
+            transform: translateY(0px) scale(0.98) !important;
+            filter: brightness(1.25) !important;
+            box-shadow: 
+                inset 0 clamp(2px, 0.4vw, 4px) clamp(4px, 0.8vw, 8px) rgba(0,0,0,0.2),
+                0 clamp(1px, 0.2vw, 2px) clamp(4px, 0.8vw, 8px) rgba(0,123,255,0.3),
+                0 0 clamp(12px, 2.4vw, 24px) rgba(0,123,255,0.25) !important;
+            transition: all 0.1s ease !important;
+        }
+        
+        /* Firefox DateTime-local Picker */
+        input[type="datetime-local"]::-moz-calendar-picker-indicator {
+            filter: invert(1) brightness(1.2) !important;
+        }
+
+        /* Para Birimi Dropdown Styling */
+        select[style*="position: absolute"] {
+            background-color: rgba(30, 40, 50, 0.95) !important;
+            color: #fff !important;
+            border-radius: 8px !important;
+            font-family: "Kalam", "Comic Sans MS", cursive, sans-serif !important;
+            transform: translateY(-50%) !important; /* Sabit pozisyon */
+        }
+
+        /* Mavi border için hover */
+        select[style*="position: absolute"][style*="0, 123, 255"]:hover {
+            border-color: rgba(0, 123, 255, 0.5) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 8px rgba(0, 123, 255, 0.2) !important;
+            filter: brightness(1.02) !important;
+        }
+
+        select[style*="position: absolute"][style*="0, 123, 255"]:focus {
+            outline: none !important;
+            border-color: rgba(0, 123, 255, 0.7) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 12px rgba(0, 123, 255, 0.3) !important;
+        }
+
+        select[style*="position: absolute"][style*="0, 123, 255"]:active {
+            transform: translateY(-50%) !important;
+            filter: brightness(1.1) !important;
+        }
+
+        /* Yeşil border için hover */
+        select[style*="position: absolute"][style*="40, 167, 69"]:hover {
+            border-color: rgba(40, 167, 69, 0.5) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 8px rgba(40, 167, 69, 0.2) !important;
+            filter: brightness(1.02) !important;
+        }
+
+        select[style*="position: absolute"][style*="40, 167, 69"]:focus {
+            outline: none !important;
+            border-color: rgba(40, 167, 69, 0.7) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 12px rgba(40, 167, 69, 0.3) !important;
+        }
+
+        select[style*="position: absolute"][style*="40, 167, 69"]:active {
+            transform: translateY(-50%) !important;
+            filter: brightness(1.1) !important;
+        }
+
+        /* Dropdown option'ları için dark theme */
+        select[style*="position: absolute"] option {
+            background-color: rgba(30, 40, 50, 0.98) !important;
+            color: #ffffff !important;
+            padding: 8px 12px !important;
+            font-family: "Kalam", "Comic Sans MS", cursive, sans-serif !important;
+            font-size: 12px !important;
+        }
+
+        select[style*="position: absolute"] option:hover {
+            background-color: rgba(0, 123, 255, 0.3) !important;
+            color: #ffffff !important;
+        }
+
+        select[style*="position: absolute"] option:checked {
+            background-color: rgba(0, 123, 255, 0.5) !important;
+            color: #ffffff !important;
+            font-weight: 600 !important;
+        }
+
+        /* Özel taksit sayısı input */
+        input[type="number"][placeholder="?"] {
+            -moz-appearance: textfield !important;
+            appearance: textfield !important;
+            line-height: 28px !important;
+        }
+
+        input[type="number"][placeholder="?"]::-webkit-outer-spin-button,
+        input[type="number"][placeholder="?"]::-webkit-inner-spin-button {
+            -webkit-appearance: none !important;
+            margin: 0 !important;
+        }
+
+        input[type="number"][placeholder="?"]:hover {
+            filter: brightness(1.05) !important;
+        }
+
+        input[type="number"][placeholder="?"]:focus {
+            outline: none !important;
+        }
+        
+        /* Taksit dropdown ve input elementleri */
+        select[style*="borderRadius: 6px"],
+        input[type="number"][placeholder="?"] {
+            vertical-align: middle !important;
+            line-height: 28px !important;
+        }
+
+        /* Input Placeholder Dark Theme */
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.4) !important;
+            opacity: 1 !important;
+        }
+
+        input::-webkit-input-placeholder {
+            color: rgba(255, 255, 255, 0.4) !important;
+            opacity: 1 !important;
+        }
+
+        input::-moz-placeholder {
+            color: rgba(255, 255, 255, 0.4) !important;
+            opacity: 1 !important;
+        }
+
+        input:-ms-input-placeholder {
+            color: rgba(255, 255, 255, 0.4) !important;
+            opacity: 1 !important;
+        }
+        
+        /* Input içinde değer varsa yeşil yap */
+        input[type="date"][data-has-value="true"],
+        input[type="datetime-local"][data-has-value="true"] {
+            color: rgba(40, 167, 69, 0.95) !important;
+        }
+        
+        input[type="date"][data-has-value="true"]::-webkit-datetime-edit,
+        input[type="datetime-local"][data-has-value="true"]::-webkit-datetime-edit,
+        input[type="date"][data-has-value="true"]::-webkit-datetime-edit-fields-wrapper,
+        input[type="datetime-local"][data-has-value="true"]::-webkit-datetime-edit-fields-wrapper,
+        input[type="date"][data-has-value="true"]::-webkit-datetime-edit-day-field,
+        input[type="datetime-local"][data-has-value="true"]::-webkit-datetime-edit-day-field,
+        input[type="date"][data-has-value="true"]::-webkit-datetime-edit-month-field,
+        input[type="datetime-local"][data-has-value="true"]::-webkit-datetime-edit-month-field,
+        input[type="date"][data-has-value="true"]::-webkit-datetime-edit-year-field,
+        input[type="datetime-local"][data-has-value="true"]::-webkit-datetime-edit-year-field,
+        input[type="datetime-local"][data-has-value="true"]::-webkit-datetime-edit-hour-field,
+        input[type="datetime-local"][data-has-value="true"]::-webkit-datetime-edit-minute-field {
+            color: rgba(40, 167, 69, 0.95) !important;
+        }
+        
+        /* Compact Date Input - AGRESIF minimize */
+        .custom-date-compact {
+            font-size: 11px !important;
+            letter-spacing: -0.5px !important;
+        }
+        
+        .custom-date-compact::-webkit-datetime-edit {
+            padding: 0 !important;
+            margin: 0 !important;
+            display: inline-flex !important;
+            width: auto !important;
+            max-width: 90px !important;
+        }
+        
+        .custom-date-compact::-webkit-datetime-edit-fields-wrapper {
+            padding: 0 !important;
+            margin: 0 !important;
+            display: inline-flex !important;
+            width: auto !important;
+            max-width: 90px !important;
+        }
+        
+        .custom-date-compact::-webkit-datetime-edit-text {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        
+        .custom-date-compact::-webkit-datetime-edit-day-field,
+        .custom-date-compact::-webkit-datetime-edit-month-field,
+        .custom-date-compact::-webkit-datetime-edit-year-field {
+            padding: 0 !important;
+            margin: 0 !important;
+            min-width: 0 !important;
+            width: auto !important;
+        }
+        
+        .custom-date-compact::-webkit-calendar-picker-indicator {
+            padding: 0 !important;
+            margin: 0 0 0 1px !important;
+            width: 16px !important;
+            height: 16px !important;
+            min-width: 16px !important;
+            flex-shrink: 0 !important;
+            background-size: 14px 14px !important;
+            cursor: pointer !important;
+        }
+        
+        /* Text inputlarının yazı rengi */
+        input[type="text"],
+        input[type="number"]:not([placeholder="?"]) {
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        input[type="text"]:not(:placeholder-shown),
+        input[type="number"]:not([placeholder="?"]):not(:placeholder-shown) {
+            color: rgba(40, 167, 69, 0.95) !important;
+        }
+
+        /* Cursor Glow Canvas - Styles handled by JavaScript */
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script>
+        // Tüm input ve select elementlerine Enter tuşu ile blur özelliği ekle
+        document.addEventListener('DOMContentLoaded', function() {
+            // Enter tuşuna basınca blur (onay) işlemi
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    const activeElement = document.activeElement;
+                    if (activeElement && (
+                        activeElement.tagName === 'INPUT' || 
+                        activeElement.tagName === 'SELECT' ||
+                        activeElement.tagName === 'TEXTAREA'
+                    )) {
+                        activeElement.blur();
+                        e.preventDefault();
+                    }
+                }
+            });
+        });
+
+        // Date input'larda field'lara tıklama efekti ekle
+        document.addEventListener('DOMContentLoaded', function() {
+            let currentDateInput = null;
+            let selectedField = null;
+            
+            // mousedown ile tarayıcının default davranışını kontrol et
+            document.body.addEventListener('mousedown', function(e) {
+                const target = e.target;
+                
+                // Date input içinde bir yere tıklanmış mı kontrol et
+                if (target.type === 'date' || target.closest('input[type="date"]')) {
+                    const dateInput = target.type === 'date' ? target : target.closest('input[type="date"]');
+                    currentDateInput = dateInput;
+                    
+                    // Tıklanan pozisyona göre hangi field olduğunu belirle
+                    const rect = dateInput.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const width = rect.width;
+                    
+                    // Padding ve takvim ikonu için ayarlamalar
+                    const padding = 12;
+                    const iconWidth = 30;
+                    const textAreaWidth = width - padding - iconWidth;
+                    const relativeX = clickX - padding;
+                    
+                    // Format: "DD . MM . YYYY"
+                    // Tablo veya Form içinde mi kontrol et - ClassName kullan (daha garantili)
+                    const isInTable = dateInput.classList.contains('table-date-input');
+                    
+                    let activeClass = '';
+                    
+                    if (isInTable) {
+                        // "Arasında" operatörü için özel sınırlar
+                        const dateIndex = dateInput.getAttribute('data-date-index');
+                        
+                        if (dateIndex === '0') {
+                            // BİRİNCİ tarih filtresi sınırları:
+                            // gg: 8.10 - 22.10 px
+                            // aa: 27.10 - 42.10 px
+                            // yyyy: 48.10 - 75.10 px
+                            if (relativeX >= 8.10 && relativeX <= 22.10) {
+                                activeClass = 'date-day-active';
+                                selectedField = 'day';
+                            } else if (relativeX >= 27.10 && relativeX <= 42.10) {
+                                activeClass = 'date-month-active';
+                                selectedField = 'month';
+                            } else if (relativeX >= 48.10 && relativeX <= 75.10) {
+                                activeClass = 'date-year-active';
+                                selectedField = 'year';
+                            }
+                        } else if (dateIndex === '1') {
+                            // İKİNCİ tarih filtresi sınırları:
+                            // gg: 7.60 - 23.60 px
+                            // aa: 27.60 - 43.60 px
+                            // yyyy: 57.60 - 73.60 px
+                            if (relativeX >= 7.60 && relativeX <= 23.60) {
+                                activeClass = 'date-day-active';
+                                selectedField = 'day';
+                            } else if (relativeX >= 27.60 && relativeX <= 43.60) {
+                                activeClass = 'date-month-active';
+                                selectedField = 'month';
+                            } else if (relativeX >= 57.60 && relativeX <= 73.60) {
+                                activeClass = 'date-year-active';
+                                selectedField = 'year';
+                            }
+                        } else {
+                            // Normal TABLO date input'ları için sınırlar:
+                            // Gün merkezi: 34.39-53.39 px → Gün alanı 0-56 arası
+                            // Ay merkezi: 57.39-74.39 px → Ay alanı 56-78 arası
+                            // Yıl merkezi: 80.39-111.39 px → Yıl alanı 78+ arası
+                            if (relativeX < 56) {
+                                activeClass = 'date-day-active';
+                                selectedField = 'day';
+                            } else if (relativeX < 78) {
+                                activeClass = 'date-month-active';
+                                selectedField = 'month';
+                            } else if (relativeX < textAreaWidth) {
+                                activeClass = 'date-year-active';
+                                selectedField = 'year';
+                            }
+                        }
+                    } else {
+                        // FORM içindeki date input'lar için sınırlar:
+                        // Gün: 2 ile 21 px arası
+                        // Ay: 27 ile 41 px arası
+                        // Yıl: 48 ile 80 px arası
+                        
+                        if (relativeX >= 2 && relativeX <= 21) {
+                            activeClass = 'date-day-active';
+                            selectedField = 'day';
+                        } else if (relativeX >= 27 && relativeX <= 41) {
+                            activeClass = 'date-month-active';
+                            selectedField = 'month';
+                        } else if (relativeX >= 48 && relativeX <= 80) {
+                            activeClass = 'date-year-active';
+                            selectedField = 'year';
+                        }
+                    }
+                    
+                    // TARAYICININ DEFAULT DAVRANIŞINI ENGELLE
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Input'a focus ver
+                    dateInput.focus();
+                    
+                    // Tüm date input'lardan active class'ları kaldır
+                    document.querySelectorAll('input[type="date"]').forEach(input => {
+                        input.classList.remove('date-day-active', 'date-month-active', 'date-year-active');
+                    });
+                    
+                    // Yeni active class ekle (async)
+                    setTimeout(() => {
+                        if (activeClass) {
+                            dateInput.classList.add(activeClass);
+                        }
+                        
+                        // Doğru field'ı seç (Tab tuşuna basarak)
+                        if (selectedField === 'month') {
+                            // Ay'a geç (1 tab)
+                            dateInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', keyCode: 9, bubbles: true }));
+                        } else if (selectedField === 'year') {
+                            // Yıl'a geç (2 tab)
+                            dateInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', keyCode: 9, bubbles: true }));
+                            setTimeout(() => {
+                                dateInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', keyCode: 9, bubbles: true }));
+                            }, 10);
+                        }
+                    }, 0);
+                }
+            }, true); // Capture phase kullan
+            
+            // Input dışına tıklanınca active class'ı kaldır
+            document.addEventListener('mousedown', function(e) {
+                if (!e.target.closest('input[type="date"]')) {
+                    document.querySelectorAll('input[type="date"]').forEach(input => {
+                        input.classList.remove('date-day-active', 'date-month-active', 'date-year-active');
+                    });
+                    currentDateInput = null;
+                    selectedField = null;
+                }
+            });
+        });
+
+        // Premium Cursor Glow Effect
+        // Now handled by React component (CursorGlowCanvas)
+    </script>
+</body>
+</html> 
