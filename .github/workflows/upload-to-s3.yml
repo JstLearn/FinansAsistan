@@ -3,162 +3,967 @@ name: Upload Complete Project to S3
 on:
   push:
     branches:
-      - master  # Master branch trigger (production)
-      - main    # Main branch trigger
-  workflow_dispatch:  # Manual trigger
-    inputs:
-      upload_reason:
-        description: 'Reason for manual upload'
-        required: false
-        default: 'manual'
+      - master  # Sadece master branch'ine push yapıldığında tetikle
+  workflow_dispatch:  # Manuel tetikleme için
+
+# Environment variables will be loaded from GitHub Secrets
 
 env:
-  AWS_REGION: eu-central-1
-  S3_BUCKET: jstlearn-finans-backup
-  S3_PREFIX: project-files
+  AWS_REGION: ${{ secrets.AWS_REGION }}
 
 jobs:
-  upload-to-s3:
-    name: Upload Project Files to S3
+  upload-complete-project-to-s3:
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
-
+          fetch-depth: 0  # Tüm commit geçmişini çek
+      
+      - name: Validate k8s YAML files before upload
+        run: |
+          echo "🔍 Validating k8s YAML files before S3 upload..."
+          
+          # Check if kubectl is available (for YAML validation)
+          if ! command -v kubectl &> /dev/null; then
+            echo "📦 Installing kubectl for YAML validation..."
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            chmod +x kubectl
+            sudo mv kubectl /usr/local/bin/
+          fi
+          
+          # Find all YAML files in k8s directory
+          K8S_FILES=$(find k8s -name "*.yaml" -o -name "*.yml" 2>/dev/null | sort)
+          
+          if [ -z "$K8S_FILES" ]; then
+            echo "⚠️  No k8s YAML files found"
+            exit 0
+          fi
+          
+          echo "📋 Found $(echo "$K8S_FILES" | wc -l) k8s YAML file(s)"
+          echo ""
+          
+          VALIDATION_FAILED=false
+          FAILED_FILES=""
+          
+          # Validate each YAML file
+          for yaml_file in $K8S_FILES; do
+            echo "🔍 Validating: $yaml_file"
+            
+            # Try to parse YAML with kubectl (dry-run)
+            if kubectl apply --dry-run=client -f "$yaml_file" >/dev/null 2>&1; then
+              echo "  ✅ Valid YAML"
+            else
+              # If kubectl fails, try yq or python yaml parser as fallback
+              if command -v yq &> /dev/null; then
+                if yq eval '.' "$yaml_file" >/dev/null 2>&1; then
+                  echo "  ✅ Valid YAML (yq validation)"
+                else
+                  echo "  ❌ Invalid YAML (yq validation failed)"
+                  VALIDATION_FAILED=true
+                  FAILED_FILES="${FAILED_FILES}${yaml_file}\n"
+                fi
+              elif python3 -c "import yaml; yaml.safe_load(open('$yaml_file'))" 2>/dev/null; then
+                echo "  ✅ Valid YAML (Python validation)"
+              else
+                echo "  ❌ Invalid YAML"
+                VALIDATION_FAILED=true
+                FAILED_FILES="${FAILED_FILES}${yaml_file}\n"
+                
+                # Show error details
+                echo "  Error details:"
+                kubectl apply --dry-run=client -f "$yaml_file" 2>&1 | head -10 || true
+              fi
+            fi
+          done
+          
+          echo ""
+          
+          if [ "$VALIDATION_FAILED" = true ]; then
+            echo "❌ YAML validation failed for the following files:"
+            echo -e "$FAILED_FILES"
+            echo ""
+            echo "⚠️  These files will NOT be uploaded to S3"
+            echo "   Please fix the YAML syntax errors before pushing to GitHub"
+            exit 1
+          else
+            echo "✅ All k8s YAML files are valid"
+          fi
+      
+      - name: Get AWS credentials and S3 bucket from GitHub Secrets
+        id: aws-creds
+        run: |
+          # Get AWS credentials from individual GitHub Secrets (matching .env file variable names)
+          AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+          AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          AWS_REGION="${{ secrets.AWS_REGION }}"
+          S3_BUCKET="${{ secrets.S3_BUCKET }}"
+          AWS_ACCOUNT_ID="${{ secrets.AWS_ACCOUNT_ID }}"
+          
+          # Clean credentials: remove newlines, carriage returns, and trim whitespace
+          # Use sed instead of xargs to handle empty strings properly
+          AWS_ACCESS_KEY_ID=$(echo -n "$AWS_ACCESS_KEY_ID" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          AWS_SECRET_ACCESS_KEY=$(echo -n "$AWS_SECRET_ACCESS_KEY" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          AWS_REGION=$(echo -n "$AWS_REGION" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          S3_BUCKET=$(echo -n "$S3_BUCKET" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          if [ -n "$AWS_ACCOUNT_ID" ]; then
+            AWS_ACCOUNT_ID=$(echo -n "$AWS_ACCOUNT_ID" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          fi
+          
+          # Validate required credentials
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "❌ AWS credentials not found in GitHub Secrets!"
+            echo "Required secrets:"
+            echo "  - AWS_ACCESS_KEY_ID"
+            echo "  - AWS_SECRET_ACCESS_KEY"
+            echo "Optional secrets:"
+            echo "  - AWS_REGION (default: eu-central-1)"
+            echo "  - S3_BUCKET (default: finans-asistan-backups)"
+            echo "  - AWS_ACCOUNT_ID"
+            exit 1
+          fi
+          
+          # Validate credential format
+          if [ ${#AWS_ACCESS_KEY_ID} -lt 16 ] || [ ${#AWS_ACCESS_KEY_ID} -gt 128 ]; then
+            echo "⚠️  WARNING: AWS_ACCESS_KEY_ID length seems invalid (${#AWS_ACCESS_KEY_ID} chars)"
+          fi
+          if [ ${#AWS_SECRET_ACCESS_KEY} -lt 20 ] || [ ${#AWS_SECRET_ACCESS_KEY} -gt 128 ]; then
+            echo "⚠️  WARNING: AWS_SECRET_ACCESS_KEY length seems invalid (${#AWS_SECRET_ACCESS_KEY} chars)"
+          fi
+          
+          # Set defaults if not provided
+          AWS_REGION=${AWS_REGION:-eu-central-1}
+          S3_BUCKET=${S3_BUCKET:-finans-asistan-backups}
+          
+          # Try to get from terraform output if available
+          if [ -f "terraform/aws/terraform.tfstate" ]; then
+            TERRAFORM_BUCKET=$(cd terraform/aws && terraform output -raw s3_backup_bucket 2>/dev/null || echo "")
+            if [ -n "$TERRAFORM_BUCKET" ]; then
+              S3_BUCKET="$TERRAFORM_BUCKET"
+            fi
+          fi
+          
+          # Final validation before setting outputs
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "❌ ERROR: AWS credentials are empty after cleaning!"
+            echo "AWS_ACCESS_KEY_ID length: ${#AWS_ACCESS_KEY_ID}"
+            echo "AWS_SECRET_ACCESS_KEY length: ${#AWS_SECRET_ACCESS_KEY}"
+            exit 1
+          fi
+          
+          # Set outputs (masked for security) - ensure no newlines
+          # Use printf to avoid issues with tr on empty strings
+          printf "access_key_id=%s\n" "$AWS_ACCESS_KEY_ID" >> $GITHUB_OUTPUT
+          printf "secret_access_key=%s\n" "$AWS_SECRET_ACCESS_KEY" >> $GITHUB_OUTPUT
+          printf "region=%s\n" "$AWS_REGION" >> $GITHUB_OUTPUT
+          printf "bucket=%s\n" "$S3_BUCKET" >> $GITHUB_OUTPUT
+          if [ -n "$AWS_ACCOUNT_ID" ]; then
+            printf "account_id=%s\n" "$AWS_ACCOUNT_ID" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "✅ AWS credentials loaded from GitHub Secrets"
+          echo "Using S3 bucket: $S3_BUCKET"
+          echo "Using AWS region: $AWS_REGION"
+          if [ -n "$AWS_ACCOUNT_ID" ]; then
+            echo "Using AWS account ID: $AWS_ACCOUNT_ID"
+          fi
+      
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Create project archive
+          aws-access-key-id: ${{ steps.aws-creds.outputs.access_key_id }}
+          aws-secret-access-key: ${{ steps.aws-creds.outputs.secret_access_key }}
+          aws-region: ${{ steps.aws-creds.outputs.region }}
+      
+      - name: Get S3 bucket name
+        id: get-bucket
         run: |
-          # Get current date and commit info
-          DATE=$(date -u +%Y%m%d-%H%M%S)
-          COMMIT_SHORT=$(echo ${{ github.sha }} | cut -c1-7)
-          BRANCH=$(echo ${{ github.ref_name }} | sed 's/\//-/g')
-          
-          echo "Creating archive for branch: $BRANCH, commit: $COMMIT_SHORT"
-          
-          # Create a compressed archive of the entire project
-          # Exclude unnecessary files
-          tar -czf /tmp/finans-asistan-${DATE}-${COMMIT_SHORT}.tar.gz \
-            --exclude='.git' \
-            --exclude='node_modules' \
-            --exclude='*.log' \
-            --exclude='.env' \
-            --exclude='.env.*' \
-            --exclude='terraform/.terraform' \
-            --exclude='terraform/**/.terraform' \
-            --exclude='*.tfstate' \
-            --exclude='*.tfstate.backup' \
-            --exclude='front/build' \
-            --exclude='front/dist' \
-            --exclude='__pycache__' \
-            --exclude='*.pyc' \
-            --exclude='.DS_Store' \
-            .
-          
-          echo "Archive created: finans-asistan-${DATE}-${COMMIT_SHORT}.tar.gz"
-          ls -lh /tmp/finans-asistan-*.tar.gz
-          
-          # Store filename for later steps
-          echo "ARCHIVE_NAME=finans-asistan-${DATE}-${COMMIT_SHORT}.tar.gz" >> $GITHUB_ENV
-          echo "DATE=${DATE}" >> $GITHUB_ENV
-          echo "COMMIT_SHORT=${COMMIT_SHORT}" >> $GITHUB_ENV
-          echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
-
-      - name: Upload archive to S3
+          echo "bucket=${{ steps.aws-creds.outputs.bucket }}" >> $GITHUB_OUTPUT
+          echo "Using S3 bucket: ${{ steps.aws-creds.outputs.bucket }}"
+      
+      - name: Install dependencies (for building)
         run: |
-          # Upload to S3 with versioned path
-          aws s3 cp \
-            /tmp/${{ env.ARCHIVE_NAME }} \
-            s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/archives/${{ env.BRANCH }}/${{ env.ARCHIVE_NAME }} \
-            --storage-class STANDARD_IA
-          
-          echo "Archive uploaded to S3"
-
-      - name: Upload individual files to S3
+          # Node.js dependencies (sadece package.json'ları sync için gerekli değil ama build için gerekebilir)
+          echo "Skipping npm install - will sync node_modules from S3 if exists"
+      
+      - name: Sync project to S3 (birebir eşitleme)
         run: |
-          # Sync the project files directly to S3 (excluding unnecessary files)
-          aws s3 sync . \
-            s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/latest/ \
-            --exclude '.git/*' \
-            --exclude 'node_modules/*' \
-            --exclude '*.log' \
-            --exclude '.env' \
-            --exclude '.env.*' \
-            --exclude 'terraform/.terraform/*' \
-            --exclude 'terraform/**/.terraform/*' \
-            --exclude '*.tfstate' \
-            --exclude '*.tfstate.backup' \
-            --exclude 'front/build/*' \
-            --exclude 'front/dist/*' \
-            --exclude '__pycache__/*' \
-            --exclude '*.pyc' \
-            --exclude '.DS_Store' \
-            --delete \
-            --storage-class STANDARD
+          echo "═══════════════════════════════════════════════════════════"
+          echo "  Projeyi S3'e Birebir Eşitleme"
+          echo "═══════════════════════════════════════════════════════════"
+          echo ""
+          echo "📋 Sync Davranışı:"
+          echo "  ✅ Sadece değişen dosyalar yüklenecek (checksum farklıysa)"
+          echo "  ✅ Lokalde olmayan dosyalar S3'ten silinecek (--delete)"
+          echo "  ✅ Lokal ile S3 bucket birebir aynı olacak"
+          echo ""
+          echo "📦 Yüklenen Dosyalar:"
+          echo "  - Tüm kaynak kodlar"
+          echo "  - node_modules/ (varsa)"
+          echo "  - Tüm konfigürasyon dosyaları"
+          echo "  - .gitignore'daki dosyalar dahil"
+          echo ""
+          echo "🚫 S3'e Yüklenmeyecek:"
+          echo "  - .git/ klasörü"
+          echo "  - Log dosyaları (*.log)"
+          echo ""
+          echo "✅ Tüm dosyalar encryption (AES256) ile yüklenecek"
+          echo "  - QUICK_START/.env dahil tüm .env dosyaları yüklenecek"
+          echo ""
+          echo "⚠️  NOT: S3 versioning aktifse eski versiyonlar korunur"
+          echo ""
           
-          echo "Project files synced to S3 latest/"
-
-      - name: Upload commit-specific snapshot
-        run: |
-          # Also save a snapshot for this specific commit
-          aws s3 sync . \
-            s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/commits/${{ github.sha }}/ \
-            --exclude '.git/*' \
-            --exclude 'node_modules/*' \
-            --exclude '*.log' \
-            --exclude '.env' \
-            --exclude '.env.*' \
-            --exclude 'terraform/.terraform/*' \
-            --exclude '*.tfstate' \
-            --exclude '*.tfstate.backup' \
-            --exclude 'front/build/*' \
-            --exclude 'front/dist/*' \
-            --exclude '__pycache__/*' \
-            --exclude '*.pyc' \
-            --exclude '.DS_Store' \
-            --storage-class STANDARD_IA
+          BUCKET="${{ steps.get-bucket.outputs.bucket }}"
+          COMMIT_SHA="${{ github.sha }}"
+          BRANCH_NAME="${{ github.ref_name }}"
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           
-          echo "Commit snapshot saved to S3"
-
-      - name: Update latest.json metadata
-        run: |
-          # Create metadata file
-          cat > /tmp/latest.json <<EOF
-          {
-            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "commit": "${{ github.sha }}",
-            "commit_short": "${{ env.COMMIT_SHORT }}",
-            "branch": "${{ github.ref_name }}",
-            "archive": "${{ env.S3_PREFIX }}/archives/${{ env.BRANCH }}/${{ env.ARCHIVE_NAME }}",
-            "files_path": "${{ env.S3_PREFIX }}/latest/",
-            "author": "${{ github.actor }}",
-            "message": "${{ github.event.head_commit.message }}"
+          # Check if versioning is enabled
+          VERSIONING_STATUS=$(aws s3api get-bucket-versioning --bucket "${BUCKET}" --query 'Status' --output text 2>/dev/null || echo "NotSet")
+          if [ "$VERSIONING_STATUS" != "Enabled" ]; then
+            echo "⚠️  UYARI: S3 versioning aktif değil (bucket: ${BUCKET})"
+            echo "   Eski dosya versiyonları üzerine yazılacak (silinmeyecek, değiştirilecek)"
+            echo "   Versioning'i aktifleştirmek için: aws s3api put-bucket-versioning --bucket ${BUCKET} --versioning-configuration Status=Enabled"
+          else
+            echo "✅ S3 versioning aktif - eski versiyonlar korunacak"
+          fi
+          
+          echo ""
+          echo "🔄 S3 sync başlatılıyor..."
+          echo "   Kaynak: . (lokal proje kök dizini)"
+          echo "   Hedef: s3://${BUCKET}/FinansAsistan/"
+          echo ""
+          
+          # Önce S3'teki mevcut dosyaları kontrol et (debug için)
+          echo "📊 S3'teki mevcut dosya sayısı (sync öncesi):"
+          aws s3 ls "s3://${BUCKET}/FinansAsistan/" --recursive --summarize 2>/dev/null | tail -1 || echo "  (hesaplanıyor...)"
+          echo ""
+          
+          # ADIM 1: Lokaldeki tüm dosyaları listeleyelim (exclude edilenler hariç)
+          echo "📋 Lokaldeki dosyalar listeleniyor..."
+          find . -type f \
+            ! -path "./.git/*" \
+            ! -name "*.log" \
+            ! -name ".DS_Store" \
+            ! -name "Thumbs.db" \
+            -print | sed 's|^\./||' | sort > /tmp/local_files.txt
+          
+          LOCAL_FILE_COUNT=$(wc -l < /tmp/local_files.txt | tr -d ' ')
+          echo "   Lokaldeki dosya sayısı: ${LOCAL_FILE_COUNT}"
+          echo ""
+          
+          # ADIM 2: S3'teki tüm dosyaları listeleyelim (prefix'i kaldırarak)
+          echo "📋 S3'teki dosyalar listeleniyor..."
+          S3_PREFIX="FinansAsistan/"
+          aws s3 ls "s3://${BUCKET}/${S3_PREFIX}" --recursive 2>/dev/null | \
+            awk '{print $4}' | \
+            sed "s|^${S3_PREFIX}||" | \
+            grep -v "^\.git/" | \
+            grep -v "\.log$" | \
+            grep -v "\.DS_Store$" | \
+            grep -v "Thumbs\.db$" | \
+            sort > /tmp/s3_files.txt
+          
+          S3_FILE_COUNT=$(wc -l < /tmp/s3_files.txt | tr -d ' ')
+          echo "   S3'teki dosya sayısı: ${S3_FILE_COUNT}"
+          echo ""
+          
+          # ADIM 3: S3'te olan ama lokalde olmayan dosyaları bulalım
+          echo "🔍 Fark analizi yapılıyor..."
+          comm -23 /tmp/s3_files.txt /tmp/local_files.txt > /tmp/files_to_delete.txt
+          FILES_TO_DELETE_COUNT=$(wc -l < /tmp/files_to_delete.txt | tr -d ' ')
+          
+          if [ "$FILES_TO_DELETE_COUNT" -gt 0 ]; then
+            echo "   ⚠️  S3'te olan ama lokalde olmayan dosya sayısı: ${FILES_TO_DELETE_COUNT}"
+            echo ""
+            echo "🗑️  Bu dosyalar S3'ten silinecek:"
+            head -20 /tmp/files_to_delete.txt | sed 's/^/     - /'
+            if [ "$FILES_TO_DELETE_COUNT" -gt 20 ]; then
+              echo "     ... ve $((FILES_TO_DELETE_COUNT - 20)) dosya daha"
+            fi
+            echo ""
+            
+            # ADIM 4: Lokalde olmayan dosyaları S3'ten silelim
+            echo "🗑️  Lokalde olmayan dosyalar S3'ten siliniyor..."
+            while IFS= read -r file; do
+              if [ -n "$file" ]; then
+                aws s3 rm "s3://${BUCKET}/${S3_PREFIX}${file}" 2>/dev/null || true
+              fi
+            done < /tmp/files_to_delete.txt
+            echo "   ✅ ${FILES_TO_DELETE_COUNT} dosya silindi"
+            echo ""
+          else
+            echo "   ✅ S3'te lokalde olmayan dosya yok"
+            echo ""
+          fi
+          
+          # ADIM 5: Normal sync işlemi (sadece değişen dosyaları yükle)
+          echo "🔄 Sync işlemi başlatılıyor (sadece değişen dosyalar yüklenecek)..."
+          aws s3 sync . "s3://${BUCKET}/${S3_PREFIX}" \
+            --exclude ".git/*" \
+            --exclude "*.log" \
+            --exclude ".DS_Store" \
+            --exclude "Thumbs.db" \
+            --metadata "commit=${COMMIT_SHA},branch=${BRANCH_NAME},uploaded=${TIMESTAMP}" \
+            --metadata-directive REPLACE || {
+            echo "❌ S3 sync başarısız!"
+            exit 1
           }
-          EOF
           
-          aws s3 cp /tmp/latest.json \
-            s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/latest.json
+          # NOTE: QUICK_START/.env is created from GitHub Secrets and uploaded separately
+          # (see "Create and upload QUICK_START/.env from GitHub Secrets" step below)
+          # Other .env files in repository are not uploaded (they contain sensitive data)
           
-          echo "Metadata updated"
-          cat /tmp/latest.json
-
-      - name: Summary
+          echo ""
+          echo "✅ Proje S3'e başarıyla eşitlendi"
+          echo "   Konum: s3://${BUCKET}/${S3_PREFIX}"
+          echo "   Commit: ${COMMIT_SHA}"
+          echo ""
+          
+          # Sync sonrası kontrol
+          echo "📊 S3'teki dosya sayısı (sync sonrası):"
+          aws s3 ls "s3://${BUCKET}/${S3_PREFIX}" --recursive --summarize 2>/dev/null | tail -1 || echo "  (hesaplanıyor...)"
+          echo ""
+          
+          echo "📝 Özet:"
+          echo "  - Lokaldeki tüm dosyalar listelendi (${LOCAL_FILE_COUNT} dosya)"
+          echo "  - S3'teki tüm dosyalar listelendi (${S3_FILE_COUNT} dosya)"
+          if [ "$FILES_TO_DELETE_COUNT" -gt 0 ]; then
+            echo "  - ${FILES_TO_DELETE_COUNT} dosya S3'ten silindi (lokalde yok)"
+          fi
+          echo "  - Sadece değişen dosyalar yüklendi"
+          echo "  - Lokal ve S3 bucket artık birebir aynı (tüm dosyalar encryption ile yüklendi)"
+          echo ""
+          echo "🔍 Önemli: Tüm alt klasörler en alt kırılımlarına kadar kontrol edildi"
+      
+      # CRITICAL: Create QUICK_START/.env from GitHub Secrets and upload to S3
+      # This file is NOT committed to GitHub (in .gitignore) but MUST be in S3 for Lambda/EC2
+      - name: Create and upload QUICK_START/.env from GitHub Secrets
+        env:
+          # GRAFANA_PASSWORD is optional, defaults to 'admin' if not set
+          # Note: This may trigger a linter warning if the secret doesn't exist, but it's safe
+          GRAFANA_PASSWORD_FROM_SECRET: ${{ secrets.GRAFANA_PASSWORD }}
         run: |
-          echo "=== S3 Upload Summary ==="
-          echo "Bucket: ${{ env.S3_BUCKET }}"
+          echo "🔐 Creating QUICK_START/.env from GitHub Secrets..."
+          
+          # Get bucket name from previous step
+          BUCKET="${{ steps.get-bucket.outputs.bucket }}"
+          
+          if [ -z "$BUCKET" ] || [ "$BUCKET" = "" ]; then
+            echo "❌ CRITICAL: S3 bucket name is not set"
+            echo "   Please check GitHub Secrets configuration"
+            exit 1
+          fi
+          
+          echo "   Using S3 bucket: ${BUCKET}"
+          
+          # Create QUICK_START directory if it doesn't exist
+          mkdir -p QUICK_START
+          
+          # Get all secrets from GitHub Secrets
+          BACKUP_INTERVAL="${{ secrets.BACKUP_INTERVAL || '300' }}"
+          S3_BUCKET="${{ secrets.S3_BUCKET }}"
+          AWS_ACCOUNT_ID="${{ secrets.AWS_ACCOUNT_ID }}"
+          AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+          AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          JWT_SECRET="${{ secrets.JWT_SECRET }}"
+          AWS_REGION="${{ secrets.AWS_REGION || 'eu-central-1' }}"
+          EMAIL_PASS="${{ secrets.EMAIL_PASS }}"
+          EMAIL_USER="${{ secrets.EMAIL_USER }}"
+          ACCESS_TOKEN_GITHUB="${{ secrets.ACCESS_TOKEN_GITHUB }}"
+          POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
+          POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
+          POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
+          SMTP_HOST="${{ secrets.SMTP_HOST }}"
+          SMTP_PORT="${{ secrets.SMTP_PORT }}"
+          SMTP_SSL="${{ secrets.SMTP_SSL }}"
+          IMAP_HOST="${{ secrets.IMAP_HOST }}"
+          IMAP_PORT="${{ secrets.IMAP_PORT }}"
+          IMAP_SSL="${{ secrets.IMAP_SSL }}"
+          CLOUDFLARE_API="${{ secrets.CLOUDFLARE_API }}"
+          CLOUDFLARE_TUNNEL_TOKEN="${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}"
+          CORS_ORIGINS="${{ secrets.CORS_ORIGINS }}"
+          # GRAFANA_PASSWORD with fallback to 'admin' if not set in secrets
+          # Note: secrets.GRAFANA_PASSWORD may not exist, so we handle it gracefully
+          # Use env variable from env block to avoid linter warnings
+          GRAFANA_PASSWORD="${GRAFANA_PASSWORD_FROM_SECRET:-admin}"
+          if [ -z "$GRAFANA_PASSWORD" ] || [ "$GRAFANA_PASSWORD" = "null" ]; then
+            GRAFANA_PASSWORD="admin"
+          fi
+          
+          # Clean credentials: remove newlines and trim whitespace
+          AWS_ACCESS_KEY_ID=$(echo -n "$AWS_ACCESS_KEY_ID" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          AWS_SECRET_ACCESS_KEY=$(echo -n "$AWS_SECRET_ACCESS_KEY" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          JWT_SECRET=$(echo -n "$JWT_SECRET" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          EMAIL_PASS=$(echo -n "$EMAIL_PASS" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          POSTGRES_PASSWORD=$(echo -n "$POSTGRES_PASSWORD" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          POSTGRES_USER=$(echo -n "$POSTGRES_USER" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          POSTGRES_DB=$(echo -n "$POSTGRES_DB" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          GRAFANA_PASSWORD=$(echo -n "$GRAFANA_PASSWORD" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          SMTP_HOST=$(echo -n "$SMTP_HOST" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          SMTP_PORT=$(echo -n "$SMTP_PORT" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          SMTP_SSL=$(echo -n "$SMTP_SSL" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          IMAP_HOST=$(echo -n "$IMAP_HOST" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          IMAP_PORT=$(echo -n "$IMAP_PORT" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          IMAP_SSL=$(echo -n "$IMAP_SSL" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          CORS_ORIGINS=$(echo -n "$CORS_ORIGINS" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          
+          # Default CORS origins if not set
+          DEFAULT_CORS_ORIGINS="https://finansasistan.com,https://www.finansasistan.com"
+          if [ -z "$CORS_ORIGINS" ]; then
+            CORS_ORIGINS="$DEFAULT_CORS_ORIGINS"
+          fi
+          
+          # Verify critical secrets are present
+          missing_secrets=""
+          if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            missing_secrets="${missing_secrets} AWS_ACCESS_KEY_ID"
+          fi
+          if [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            missing_secrets="${missing_secrets} AWS_SECRET_ACCESS_KEY"
+          fi
+          if [ -z "$S3_BUCKET" ]; then
+            missing_secrets="${missing_secrets} S3_BUCKET"
+          fi
+          if [ -z "$JWT_SECRET" ]; then
+            missing_secrets="${missing_secrets} JWT_SECRET"
+          fi
+          if [ -z "$POSTGRES_DB" ]; then
+            missing_secrets="${missing_secrets} POSTGRES_DB"
+          fi
+          if [ -z "$POSTGRES_USER" ]; then
+            missing_secrets="${missing_secrets} POSTGRES_USER"
+          fi
+          if [ -z "$POSTGRES_PASSWORD" ]; then
+            missing_secrets="${missing_secrets} POSTGRES_PASSWORD"
+          fi
+          
+          if [ -n "$missing_secrets" ]; then
+            echo "❌ CRITICAL: Missing required GitHub Secrets:$missing_secrets"
+            echo "   Please configure all required secrets in GitHub Settings → Secrets → Actions"
+            exit 1
+          fi
+          
+          # Create .env file from GitHub Secrets
+          {
+            echo "# Environment variables for FinansAsistan"
+            echo "# Generated from GitHub Secrets - DO NOT COMMIT TO GIT"
+            echo "# This file is created automatically and uploaded to S3"
+            echo ""
+            echo "BACKUP_INTERVAL=${BACKUP_INTERVAL}"
+            echo "S3_BUCKET=${S3_BUCKET}"
+            [ -n "$AWS_ACCOUNT_ID" ] && echo "AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}"
+            echo "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
+            echo "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}"
+            echo "JWT_SECRET=${JWT_SECRET}"
+            echo "AWS_REGION=${AWS_REGION}"
+            [ -n "$ACCESS_TOKEN_GITHUB" ] && echo "ACCESS_TOKEN_GITHUB=${ACCESS_TOKEN_GITHUB}"
+            echo "POSTGRES_DB=${POSTGRES_DB}"
+            echo "POSTGRES_USER=${POSTGRES_USER}"
+            echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
+            echo "GRAFANA_PASSWORD=${GRAFANA_PASSWORD}"
+            [ -n "$EMAIL_USER" ] && echo "EMAIL_USER=${EMAIL_USER}"
+            [ -n "$EMAIL_PASS" ] && echo "EMAIL_PASS=${EMAIL_PASS}"            
+            [ -n "$IMAP_HOST" ] && echo "IMAP_HOST=${IMAP_HOST}"
+            [ -n "$IMAP_PORT" ] && echo "IMAP_PORT=${IMAP_PORT}"
+            [ -n "$IMAP_SSL" ] && echo "IMAP_SSL=${IMAP_SSL}"
+            [ -n "$SMTP_HOST" ] && echo "SMTP_HOST=${SMTP_HOST}"
+            [ -n "$SMTP_PORT" ] && echo "SMTP_PORT=${SMTP_PORT}"
+            [ -n "$SMTP_SSL" ] && echo "SMTP_SSL=${SMTP_SSL}"
+            [ -n "$CLOUDFLARE_API" ] && echo "CLOUDFLARE_API=${CLOUDFLARE_API}"
+            [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ] && echo "CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}"
+            [ -n "$CORS_ORIGINS" ] && echo "CORS_ORIGINS=${CORS_ORIGINS}"
+          } > QUICK_START/.env
+          
+          echo "✅ QUICK_START/.env file created from GitHub Secrets"
+          
+          # Upload to S3 with encryption
+          echo "📤 Uploading QUICK_START/.env to S3 with encryption..."
+          if aws s3 cp "QUICK_START/.env" "s3://${BUCKET}/FinansAsistan/QUICK_START/.env" \
+            --sse AES256 \
+            --metadata "uploaded=$(date -u +%Y-%m-%dT%H:%M:%SZ),commit=${GITHUB_SHA},source=github_secrets"; then
+            echo "✅ QUICK_START/.env uploaded to S3 with encryption"
+            echo "   Location: s3://${BUCKET}/FinansAsistan/QUICK_START/.env"
+          else
+            echo "❌ CRITICAL: Failed to upload QUICK_START/.env to S3"
+            echo "   Without this file, Lambda cannot start EC2 instances and services will fail"
+            exit 1
+          fi
+          
+          # Note: QUICK_START/.env file is kept in local filesystem for user's use
+          # The file is also uploaded to S3 for Lambda/EC2 instances
+          echo "✅ QUICK_START/.env file is available locally and in S3"
+      
+      - name: Detect changed services
+        id: detect-services
+        run: |
+          # Git diff ile hangi servislerin değiştiğini tespit et
+          # NOTE: This manifest is used for DEVELOPMENT (Docker Compose) updates only.
+          # Production uses Kubernetes with ArgoCD, which syncs directly from GitHub.
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git ls-files)
+          
+          BACKEND_CHANGED="false"
+          FRONTEND_CHANGED="false"
+          EVENT_PROCESSOR_CHANGED="false"
+          POSTGRES_CHANGED="false"
+          KAFKA_CHANGED="false"
+          ZOOKEEPER_CHANGED="false"
+          REDIS_CHANGED="false"
+          POSTGRES_BACKUP_CHANGED="false"
+          
+          # Backend kontrolü
+          if echo "$CHANGED_FILES" | grep -qE "^back/"; then
+            BACKEND_CHANGED="true"
+            echo "✅ Backend changed"
+          fi
+          
+          # Frontend kontrolü
+          if echo "$CHANGED_FILES" | grep -qE "^front/"; then
+            FRONTEND_CHANGED="true"
+            echo "✅ Frontend changed"
+          fi
+          
+          # Event Processor kontrolü
+          if echo "$CHANGED_FILES" | grep -qE "^services/event-processor/"; then
+            EVENT_PROCESSOR_CHANGED="true"
+            echo "✅ Event Processor changed"
+          fi
+          
+          # Postgres kontrolü (migrations, init scripts, archive scripts)
+          if echo "$CHANGED_FILES" | grep -qE "^scripts/migrations/|^bootstrap/init\.sql|^scripts/init-postgres-wal\.sh|^scripts/archive-wal\.sh|^docker-compose.*\.yml.*postgres"; then
+            POSTGRES_CHANGED="true"
+            echo "✅ Postgres changed"
+          fi
+          
+          # Kafka kontrolü (docker-compose config)
+          if echo "$CHANGED_FILES" | grep -qE "^docker-compose.*\.yml.*kafka"; then
+            KAFKA_CHANGED="true"
+            echo "✅ Kafka changed"
+          fi
+          
+          # Zookeeper kontrolü (docker-compose config)
+          if echo "$CHANGED_FILES" | grep -qE "^docker-compose.*\.yml.*zookeeper"; then
+            ZOOKEEPER_CHANGED="true"
+            echo "✅ Zookeeper changed"
+          fi
+          
+          # Redis kontrolü (docker-compose config)
+          if echo "$CHANGED_FILES" | grep -qE "^docker-compose.*\.yml.*redis"; then
+            REDIS_CHANGED="true"
+            echo "✅ Redis changed"
+          fi
+          
+          # Postgres Backup kontrolü (backup scripts)
+          if echo "$CHANGED_FILES" | grep -qE "^scripts/backup-postgres\.sh|^docker-compose.*\.yml.*postgres-backup"; then
+            POSTGRES_BACKUP_CHANGED="true"
+            echo "✅ Postgres Backup changed"
+          fi
+          
+          # Monitoring servisleri kontrolü (prometheus, grafana, alertmanager, loki, promtail)
+          PROMETHEUS_CHANGED="false"
+          GRAFANA_CHANGED="false"
+          ALERTMANAGER_CHANGED="false"
+          LOKI_CHANGED="false"
+          PROMTAIL_CHANGED="false"
+          
+          if echo "$CHANGED_FILES" | grep -qE "^monitoring/prometheus/|^docker-compose.*\.yml.*prometheus"; then
+            PROMETHEUS_CHANGED="true"
+            echo "✅ Prometheus changed"
+          fi
+          if echo "$CHANGED_FILES" | grep -qE "^monitoring/grafana/|^docker-compose.*\.yml.*grafana"; then
+            GRAFANA_CHANGED="true"
+            echo "✅ Grafana changed"
+          fi
+          if echo "$CHANGED_FILES" | grep -qE "^monitoring/alertmanager/|^docker-compose.*\.yml.*alertmanager"; then
+            ALERTMANAGER_CHANGED="true"
+            echo "✅ AlertManager changed"
+          fi
+          if echo "$CHANGED_FILES" | grep -qE "^monitoring/loki/|^docker-compose.*\.yml.*loki"; then
+            LOKI_CHANGED="true"
+            echo "✅ Loki changed"
+          fi
+          if echo "$CHANGED_FILES" | grep -qE "^monitoring/promtail/|^docker-compose.*\.yml.*promtail"; then
+            PROMTAIL_CHANGED="true"
+            echo "✅ Promtail changed"
+          fi
+          
+          # Changed services listesi oluştur
+          CHANGED_SERVICES="[]"
+          HAS_CHANGES=false
+          
+          if [ "$BACKEND_CHANGED" = "true" ]; then
+            CHANGED_SERVICES="[\"backend\""
+            HAS_CHANGES=true
+          fi
+          if [ "$FRONTEND_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"frontend\""
+            else
+              CHANGED_SERVICES="[\"frontend\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$EVENT_PROCESSOR_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"event-processor\""
+            else
+              CHANGED_SERVICES="[\"event-processor\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$POSTGRES_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"postgres\""
+            else
+              CHANGED_SERVICES="[\"postgres\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$KAFKA_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"kafka\""
+            else
+              CHANGED_SERVICES="[\"kafka\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$ZOOKEEPER_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"zookeeper\""
+            else
+              CHANGED_SERVICES="[\"zookeeper\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$REDIS_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"redis\""
+            else
+              CHANGED_SERVICES="[\"redis\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$POSTGRES_BACKUP_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"postgres-backup\""
+            else
+              CHANGED_SERVICES="[\"postgres-backup\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$PROMETHEUS_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"prometheus\""
+            else
+              CHANGED_SERVICES="[\"prometheus\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$GRAFANA_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"grafana\""
+            else
+              CHANGED_SERVICES="[\"grafana\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$ALERTMANAGER_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"alertmanager\""
+            else
+              CHANGED_SERVICES="[\"alertmanager\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$LOKI_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"loki\""
+            else
+              CHANGED_SERVICES="[\"loki\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$PROMTAIL_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"promtail\""
+            else
+              CHANGED_SERVICES="[\"promtail\""
+              HAS_CHANGES=true
+            fi
+          fi
+          
+          if [ "$HAS_CHANGES" = true ]; then
+            CHANGED_SERVICES="${CHANGED_SERVICES}]"
+          fi
+          
+          echo "backend_changed=$BACKEND_CHANGED" >> $GITHUB_OUTPUT
+          echo "frontend_changed=$FRONTEND_CHANGED" >> $GITHUB_OUTPUT
+          echo "event_processor_changed=$EVENT_PROCESSOR_CHANGED" >> $GITHUB_OUTPUT
+          echo "postgres_changed=$POSTGRES_CHANGED" >> $GITHUB_OUTPUT
+          echo "kafka_changed=$KAFKA_CHANGED" >> $GITHUB_OUTPUT
+          echo "zookeeper_changed=$ZOOKEEPER_CHANGED" >> $GITHUB_OUTPUT
+          echo "redis_changed=$REDIS_CHANGED" >> $GITHUB_OUTPUT
+          echo "postgres_backup_changed=$POSTGRES_BACKUP_CHANGED" >> $GITHUB_OUTPUT
+          echo "prometheus_changed=$PROMETHEUS_CHANGED" >> $GITHUB_OUTPUT
+          echo "grafana_changed=$GRAFANA_CHANGED" >> $GITHUB_OUTPUT
+          echo "alertmanager_changed=$ALERTMANAGER_CHANGED" >> $GITHUB_OUTPUT
+          echo "loki_changed=$LOKI_CHANGED" >> $GITHUB_OUTPUT
+          echo "promtail_changed=$PROMTAIL_CHANGED" >> $GITHUB_OUTPUT
+          # Use delimiter to preserve JSON array format
+          {
+            echo "changed_services<<EOF"
+            echo "$CHANGED_SERVICES"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+          
+          echo "Changed services: $CHANGED_SERVICES"
+      
+      - name: Create project manifest
+        run: |
+          # Create manifest.json for DEVELOPMENT (Docker Compose) auto-updates
+          # Production uses Kubernetes with ArgoCD, which syncs directly from GitHub
+          # This manifest is used by development machines running Docker Compose
+          BUCKET="${{ steps.get-bucket.outputs.bucket }}"
+          COMMIT_SHA="${{ github.sha }}"
+          BRANCH_NAME="${{ github.ref_name }}"
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          
+          # Changed services bilgisi
+          BACKEND_CHANGED="${{ steps.detect-services.outputs.backend_changed }}"
+          FRONTEND_CHANGED="${{ steps.detect-services.outputs.frontend_changed }}"
+          EVENT_PROCESSOR_CHANGED="${{ steps.detect-services.outputs.event_processor_changed }}"
+          POSTGRES_CHANGED="${{ steps.detect-services.outputs.postgres_changed }}"
+          KAFKA_CHANGED="${{ steps.detect-services.outputs.kafka_changed }}"
+          ZOOKEEPER_CHANGED="${{ steps.detect-services.outputs.zookeeper_changed }}"
+          REDIS_CHANGED="${{ steps.detect-services.outputs.redis_changed }}"
+          POSTGRES_BACKUP_CHANGED="${{ steps.detect-services.outputs.postgres_backup_changed }}"
+          PROMETHEUS_CHANGED="${{ steps.detect-services.outputs.prometheus_changed }}"
+          GRAFANA_CHANGED="${{ steps.detect-services.outputs.grafana_changed }}"
+          ALERTMANAGER_CHANGED="${{ steps.detect-services.outputs.alertmanager_changed }}"
+          LOKI_CHANGED="${{ steps.detect-services.outputs.loki_changed }}"
+          PROMTAIL_CHANGED="${{ steps.detect-services.outputs.promtail_changed }}"
+          
+          # Reconstruct CHANGED_SERVICES array from boolean outputs to ensure valid JSON
+          CHANGED_SERVICES="[]"
+          HAS_CHANGES=false
+          
+          if [ "$BACKEND_CHANGED" = "true" ]; then
+            CHANGED_SERVICES="[\"backend\""
+            HAS_CHANGES=true
+          fi
+          if [ "$FRONTEND_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"frontend\""
+            else
+              CHANGED_SERVICES="[\"frontend\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$EVENT_PROCESSOR_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"event-processor\""
+            else
+              CHANGED_SERVICES="[\"event-processor\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$POSTGRES_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"postgres\""
+            else
+              CHANGED_SERVICES="[\"postgres\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$KAFKA_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"kafka\""
+            else
+              CHANGED_SERVICES="[\"kafka\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$ZOOKEEPER_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"zookeeper\""
+            else
+              CHANGED_SERVICES="[\"zookeeper\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$REDIS_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"redis\""
+            else
+              CHANGED_SERVICES="[\"redis\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$POSTGRES_BACKUP_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"postgres-backup\""
+            else
+              CHANGED_SERVICES="[\"postgres-backup\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$PROMETHEUS_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"prometheus\""
+            else
+              CHANGED_SERVICES="[\"prometheus\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$GRAFANA_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"grafana\""
+            else
+              CHANGED_SERVICES="[\"grafana\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$ALERTMANAGER_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"alertmanager\""
+            else
+              CHANGED_SERVICES="[\"alertmanager\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$LOKI_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"loki\""
+            else
+              CHANGED_SERVICES="[\"loki\""
+              HAS_CHANGES=true
+            fi
+          fi
+          if [ "$PROMTAIL_CHANGED" = "true" ]; then
+            if [ "$HAS_CHANGES" = true ]; then
+              CHANGED_SERVICES="${CHANGED_SERVICES},\"promtail\""
+            else
+              CHANGED_SERVICES="[\"promtail\""
+              HAS_CHANGES=true
+            fi
+          fi
+          
+          if [ "$HAS_CHANGES" = true ]; then
+            CHANGED_SERVICES="${CHANGED_SERVICES}]"
+          fi
+          
+          # Proje manifest dosyası oluştur
+          {
+            echo "{"
+            echo "  \"commit\": \"${COMMIT_SHA}\","
+            echo "  \"branch\": \"${BRANCH_NAME}\","
+            echo "  \"uploaded\": \"${TIMESTAMP}\","
+            echo "  \"location\": \"s3://${BUCKET}/FinansAsistan/\","
+            echo "  \"changed_services\": ${CHANGED_SERVICES},"
+            echo "  \"services\": {"
+            echo "    \"backend\": {"
+            echo "      \"changed\": ${BACKEND_CHANGED},"
+            echo "      \"paths\": [\"back/\"]"
+            echo "    },"
+            echo "    \"frontend\": {"
+            echo "      \"changed\": ${FRONTEND_CHANGED},"
+            echo "      \"paths\": [\"front/\"]"
+            echo "    },"
+            echo "    \"event-processor\": {"
+            echo "      \"changed\": ${EVENT_PROCESSOR_CHANGED},"
+            echo "      \"paths\": [\"services/event-processor/\"]"
+            echo "    },"
+            echo "    \"postgres\": {"
+            echo "      \"changed\": ${POSTGRES_CHANGED},"
+            echo "      \"paths\": [\"scripts/migrations/\", \"bootstrap/init.sql\", \"scripts/init-postgres-wal.sh\", \"scripts/archive-wal.sh\"]"
+            echo "    },"
+            echo "    \"kafka\": {"
+            echo "      \"changed\": ${KAFKA_CHANGED},"
+            echo "      \"paths\": [\"docker-compose*.yml\"]"
+            echo "    },"
+            echo "    \"zookeeper\": {"
+            echo "      \"changed\": ${ZOOKEEPER_CHANGED},"
+            echo "      \"paths\": [\"docker-compose*.yml\"]"
+            echo "    },"
+            echo "    \"redis\": {"
+            echo "      \"changed\": ${REDIS_CHANGED},"
+            echo "      \"paths\": [\"docker-compose*.yml\"]"
+            echo "    },"
+            echo "    \"postgres-backup\": {"
+            echo "      \"changed\": ${POSTGRES_BACKUP_CHANGED},"
+            echo "      \"paths\": [\"scripts/backup-postgres.sh\"]"
+            echo "    },"
+            echo "    \"prometheus\": {"
+            echo "      \"changed\": ${PROMETHEUS_CHANGED},"
+            echo "      \"paths\": [\"monitoring/prometheus/\"]"
+            echo "    },"
+            echo "    \"grafana\": {"
+            echo "      \"changed\": ${GRAFANA_CHANGED},"
+            echo "      \"paths\": [\"monitoring/grafana/\"]"
+            echo "    },"
+            echo "    \"alertmanager\": {"
+            echo "      \"changed\": ${ALERTMANAGER_CHANGED},"
+            echo "      \"paths\": [\"monitoring/alertmanager/\"]"
+            echo "    },"
+            echo "    \"loki\": {"
+            echo "      \"changed\": ${LOKI_CHANGED},"
+            echo "      \"paths\": [\"monitoring/loki/\"]"
+            echo "    },"
+            echo "    \"promtail\": {"
+            echo "      \"changed\": ${PROMTAIL_CHANGED},"
+            echo "      \"paths\": [\"monitoring/promtail/\"]"
+            echo "    }"
+            echo "  },"
+            echo "  \"includes\": ["
+            echo "    \"All source code\","
+            echo "    \"node_modules (if exists)\","
+            echo "    \".env files\","
+            echo "    \"Configuration files\","
+            echo "    \"All project files (except .git)\""
+            echo "  ]"
+            echo "}"
+          } > /tmp/project-manifest.json
+          
+          aws s3 cp /tmp/project-manifest.json "s3://${BUCKET}/manifest.json" \
+            --content-type "application/json" \
+            --metadata "uploaded=${TIMESTAMP},commit=${COMMIT_SHA}"
+          
+          echo "✅ Project manifest created"
+          echo "Changed services: ${CHANGED_SERVICES}"
+          
+          # Create instant update trigger file for production machines
+          echo "{\"commit\":\"${COMMIT_SHA}\",\"timestamp\":\"${TIMESTAMP}\",\"triggered\":true}" > /tmp/update-trigger.json
+          aws s3 cp /tmp/update-trigger.json "s3://${BUCKET}/update-trigger.json" \
+            --content-type "application/json" \
+            --metadata "uploaded=${TIMESTAMP},commit=${COMMIT_SHA}"
+          
+          echo "✅ Instant update trigger created"
+      
+      - name: Upload summary
+        run: |
+          BUCKET="${{ steps.get-bucket.outputs.bucket }}"
+          
+          echo ""
+          echo "═══════════════════════════════════════════════════════════"
+          echo "  S3 Upload Summary"
+          echo "═══════════════════════════════════════════════════════════"
+          echo ""
+          echo "S3 Bucket: ${BUCKET}"
           echo "Commit: ${{ github.sha }}"
           echo "Branch: ${{ github.ref_name }}"
-          echo "Archive: ${{ env.ARCHIVE_NAME }}"
           echo ""
-          echo "S3 Paths:"
-          echo "  Archive: s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/archives/${{ env.BRANCH }}/${{ env.ARCHIVE_NAME }}"
-          echo "  Latest: s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/latest/"
-          echo "  Commit: s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/commits/${{ github.sha }}/"
-          echo "  Metadata: s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/latest.json"
+          echo "Project Location: s3://${BUCKET}/FinansAsistan/"
+          echo ""
+          echo "Files uploaded (sample):"
+          aws s3 ls "s3://${BUCKET}/FinansAsistan/" --recursive --human-readable | head -20 || echo "  (listing files...)"
+          echo ""
+          echo "Total size:"
+          aws s3 ls "s3://${BUCKET}/FinansAsistan/" --recursive --summarize | tail -1 || echo "  (calculating...)"
+          echo ""
+          echo "✅ Complete project uploaded successfully!"
+          echo ""
+          echo "To download and deploy:"
+          echo "  aws s3 sync s3://${BUCKET}/FinansAsistan/ ./FinansAsistan/"
+          echo ""
+

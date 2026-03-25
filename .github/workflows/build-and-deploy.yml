@@ -3,345 +3,2042 @@ name: Build and Deploy Images
 on:
   push:
     branches:
-      - master  # Master branch trigger
-    paths:
-      - 'back/**'
-      - 'front/**'
-      - 'services/**'
-      - '.github/workflows/build-and-deploy.yml'
-  workflow_dispatch:  # Allow manual trigger
-    inputs:
-      force_rebuild:
-        description: 'Force rebuild all images'
-        required: false
-        default: 'false'
+      - master  # Master branch'ine her push'ta tetikle (tüm image'ler build edilir)
+  workflow_dispatch:
+
+# Environment variables will be loaded from GitHub Secrets
 
 env:
-  AWS_REGION: eu-central-1
-  ECR_REGISTRY: 654654337554.dkr.ecr.eu-central-1.amazonaws.com
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+  FRONTEND_API_URL: ${{ secrets.FRONTEND_API_URL }}
+  # Export all secrets as environment variables for scripts
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  S3_BUCKET: ${{ secrets.S3_BUCKET }}
+  JWT_SECRET: ${{ secrets.JWT_SECRET }}
+  EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+  EMAIL_USER: ${{ secrets.EMAIL_USER }}
+  ACCESS_TOKEN_GITHUB: ${{ secrets.ACCESS_TOKEN_GITHUB }}
+  POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+  BACKUP_INTERVAL: ${{ secrets.BACKUP_INTERVAL }}
+  CLOUDFLARE_API: ${{ secrets.CLOUDFLARE_API }}
+  CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
 
 jobs:
-  detect-changes:
-    name: Detect Changed Services
-    runs-on: ubuntu-latest
-    outputs:
-      backend_changed: ${{ steps.changes.outputs.backend }}
-      frontend_changed: ${{ steps.changes.outputs.frontend }}
-      event_processor_changed: ${{ steps.changes.outputs.event_processor }}
-      any_changed: ${{ steps.changes.outputs.backend == 'true' || steps.changes.outputs.frontend == 'true' || steps.changes.outputs.event_processor == 'true' }}
+  build-and-push:
+    runs-on: [self-hosted, Linux, X64, finansasistan]
+    permissions:
+      contents: write  # Required for pushing commits
+      actions: write   # Required for deleting artifacts
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
-
-      - name: Detect changes
-        id: changes
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # Fetch all history for proper git operations
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
+          buildkitd-flags: --allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host
+      
+      - name: Install AWS CLI (if not already installed)
         run: |
-          if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
-            echo "backend=true" >> $GITHUB_OUTPUT
-            echo "frontend=true" >> $GITHUB_OUTPUT
-            echo "event_processor=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          # Get changed files
-          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only HEAD)
-          echo "Changed files:"
-          echo "$CHANGED_FILES"
-          
-          # Check backend changes
-          if echo "$CHANGED_FILES" | grep -qE '^back/'; then
-            echo "backend=true" >> $GITHUB_OUTPUT
-            echo "Backend changed"
+          if command -v aws >/dev/null 2>&1; then
+            echo "✅ AWS CLI already installed: $(aws --version)"
           else
-            echo "backend=false" >> $GITHUB_OUTPUT
+            echo "📦 Installing AWS CLI..."
+            
+            # Try AWS CLI v2 installer first (requires sudo)
+            INSTALLED=false
+            
+            if sudo -n true 2>/dev/null; then
+              echo "Attempting AWS CLI v2 installation (with sudo)..."
+              curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip 2>/dev/null || true
+              
+              if [ -f /tmp/awscliv2.zip ]; then
+                # Install unzip if not available
+                if ! command -v unzip >/dev/null 2>&1; then
+                  if command -v apt-get >/dev/null 2>&1; then
+                    sudo apt-get update -qq && sudo apt-get install -y unzip >/dev/null 2>&1 || true
+                  elif command -v yum >/dev/null 2>&1; then
+                    sudo yum install -y unzip >/dev/null 2>&1 || true
+                  fi
+                fi
+                
+                if command -v unzip >/dev/null 2>&1; then
+                  unzip -q /tmp/awscliv2.zip -d /tmp 2>/dev/null || true
+                  if [ -d /tmp/aws ]; then
+                    sudo /tmp/aws/install --update >/dev/null 2>&1 && INSTALLED=true || true
+                    rm -rf /tmp/awscliv2.zip /tmp/aws
+                  fi
+                fi
+              fi
+            fi
+            
+            # Fallback: Try pip install (user space, no sudo)
+            if [ "$INSTALLED" = false ] && command -v pip3 >/dev/null 2>&1; then
+              echo "Falling back to pip install (user space)..."
+              pip3 install --user awscli >/dev/null 2>&1 && INSTALLED=true || true
+              
+              # Add user local bin to PATH
+              if [ "$INSTALLED" = true ]; then
+                export PATH="$HOME/.local/bin:$PATH"
+                echo "$HOME/.local/bin" >> $GITHUB_PATH
+              fi
+            fi
+            
+            # Verify installation
+            if command -v aws >/dev/null 2>&1; then
+              echo "✅ AWS CLI installed successfully: $(aws --version)"
+            else
+              echo "⚠️  AWS CLI installation failed, continuing anyway (will use fallback methods)"
+              echo "   Digest retrieval and cleanup steps will be skipped"
+            fi
+          fi
+      
+      - name: Clean and validate AWS credentials
+        id: aws-creds
+        run: |
+          # Get AWS credentials from GitHub Secrets
+          AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+          AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          AWS_REGION="${{ secrets.AWS_REGION }}"
+          
+          # Clean credentials: remove newlines, carriage returns, and trim whitespace
+          AWS_ACCESS_KEY_ID=$(echo -n "$AWS_ACCESS_KEY_ID" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          AWS_SECRET_ACCESS_KEY=$(echo -n "$AWS_SECRET_ACCESS_KEY" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          AWS_REGION=$(echo -n "$AWS_REGION" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          
+          # Set default region if not provided
+          AWS_REGION=${AWS_REGION:-eu-central-1}
+          
+          # Validate required credentials
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "❌ AWS credentials not found in GitHub Secrets!"
+            echo "Required secrets:"
+            echo "  - AWS_ACCESS_KEY_ID"
+            echo "  - AWS_SECRET_ACCESS_KEY"
+            exit 1
           fi
           
-          # Check frontend changes
-          if echo "$CHANGED_FILES" | grep -qE '^front/'; then
-            echo "frontend=true" >> $GITHUB_OUTPUT
-            echo "Frontend changed"
-          else
-            echo "frontend=false" >> $GITHUB_OUTPUT
+          # Validate credential format
+          if [ ${#AWS_ACCESS_KEY_ID} -lt 16 ] || [ ${#AWS_ACCESS_KEY_ID} -gt 128 ]; then
+            echo "⚠️  WARNING: AWS_ACCESS_KEY_ID length seems invalid (${#AWS_ACCESS_KEY_ID} chars)"
+          fi
+          if [ ${#AWS_SECRET_ACCESS_KEY} -lt 20 ] || [ ${#AWS_SECRET_ACCESS_KEY} -gt 128 ]; then
+            echo "⚠️  WARNING: AWS_SECRET_ACCESS_KEY length seems invalid (${#AWS_SECRET_ACCESS_KEY} chars)"
           fi
           
-          # Check event processor changes
-          if echo "$CHANGED_FILES" | grep -qE '^services/event-processor/'; then
-            echo "event_processor=true" >> $GITHUB_OUTPUT
-            echo "Event processor changed"
-          else
-            echo "event_processor=false" >> $GITHUB_OUTPUT
-          fi
-
-  build-backend:
-    name: Build Backend Image
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.backend_changed == 'true'
-    outputs:
-      image_tag: ${{ steps.meta.outputs.version }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
+          # Set outputs (masked for security) - ensure no newlines
+          printf "access_key_id=%s\n" "$AWS_ACCESS_KEY_ID" >> $GITHUB_OUTPUT
+          printf "secret_access_key=%s\n" "$AWS_SECRET_ACCESS_KEY" >> $GITHUB_OUTPUT
+          printf "region=%s\n" "$AWS_REGION" >> $GITHUB_OUTPUT
+          
+          echo "✅ AWS credentials cleaned and validated"
+          echo "Using AWS region: $AWS_REGION"
+      
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
+          aws-access-key-id: ${{ steps.aws-creds.outputs.access_key_id }}
+          aws-secret-access-key: ${{ steps.aws-creds.outputs.secret_access_key }}
+          aws-region: ${{ steps.aws-creds.outputs.region }}
+      
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Extract metadata for backend
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.ECR_REGISTRY }}/finans-backend
-          tags: |
-            type=sha,prefix=,suffix=,format=short
-            type=raw,value=latest
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push backend image
+      
+      - name: Get ECR repository URLs
+        id: ecr-repos
+        run: |
+          BACKEND_REPO="${ECR_REGISTRY}/finans-asistan-backend-production"
+          FRONTEND_REPO="${ECR_REGISTRY}/finans-asistan-frontend-production"
+          EVENT_PROCESSOR_REPO="${ECR_REGISTRY}/finans-asistan-event-processor-production"
+          
+          echo "backend_repo=${BACKEND_REPO}" >> $GITHUB_OUTPUT
+          echo "frontend_repo=${FRONTEND_REPO}" >> $GITHUB_OUTPUT
+          echo "event_processor_repo=${EVENT_PROCESSOR_REPO}" >> $GITHUB_OUTPUT
+          
+          # ECR_REGISTRY is already set from previous step
+          echo "Using ECR Registry: ${ECR_REGISTRY}"
+      
+      - name: Detect all service changes
+        id: detect-all-changes
+        run: |
+          # Detect changes for all services
+          TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
+          COMMIT_SHA="${{ github.sha }}"
+          
+          # Get changed files - use github.event for more reliable change detection
+          # This works better with merge commits, squash merges, etc.
+          # CRITICAL: Handle force push - if before commit doesn't exist in current branch, use HEAD~1
+          if [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            # Normal push - compare before and after commits
+            # But first check if before commit exists in current branch (force push check)
+            if git cat-file -e "${{ github.event.before }}" 2>/dev/null; then
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || echo "")
+            else
+              # Force push: before commit doesn't exist in current branch, use HEAD~1
+              echo "⚠️  Force push detected (before commit not in current branch), using HEAD~1 for comparison"
+              CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+            fi
+          else
+            # First commit or no before commit - try HEAD~1
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+            if [ -z "$CHANGED_FILES" ]; then
+              # If no parent commit, check if this is the initial commit
+              PARENT_COUNT=$(git rev-list --count HEAD 2>/dev/null || echo "0")
+              if [ "$PARENT_COUNT" -le "1" ]; then
+                # Initial commit - get all files in this commit
+                CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null || echo "")
+              fi
+            fi
+          fi
+          
+          echo "🔍 Changed files detected:"
+          echo "$CHANGED_FILES" | while read -r file; do
+            if [ -n "$file" ]; then
+              echo "   - $file"
+            fi
+          done
+          
+          # Initialize change flags
+          BACKEND_CHANGED="false"
+          FRONTEND_CHANGED="false"
+          EVENT_PROCESSOR_CHANGED="false"
+          POSTGRES_CHANGED="false"
+          REDIS_CHANGED="false"
+          KAFKA_CHANGED="false"
+          MONITORING_CHANGED="false"
+          ARGOCD_CHANGED="false"
+          
+          # Backend changes
+          if echo "$CHANGED_FILES" | grep -qE "^back/|^k8s/04-backend"; then
+            BACKEND_CHANGED="true"
+            echo "✅ Backend changed"
+          fi
+          
+          # Frontend changes
+          if echo "$CHANGED_FILES" | grep -qE "^front/|^k8s/05-frontend"; then
+            FRONTEND_CHANGED="true"
+            echo "✅ Frontend changed"
+          fi
+          
+          # Event Processor changes
+          if echo "$CHANGED_FILES" | grep -qE "^services/event-processor/|^k8s/11-event-processor"; then
+            EVENT_PROCESSOR_CHANGED="true"
+            echo "✅ Event Processor changed"
+          fi
+          
+          # QUICK_START/.env changes - trigger pod restart for backend and event-processor
+          if echo "$CHANGED_FILES" | grep -qE "^QUICK_START/\.env"; then
+            BACKEND_CHANGED="true"
+            EVENT_PROCESSOR_CHANGED="true"
+            echo "✅ QUICK_START/.env changed - will restart backend and event-processor pods"
+          fi
+          
+          # PostgreSQL changes (StatefulSet, init scripts, migrations)
+          if echo "$CHANGED_FILES" | grep -qE "^k8s/01-postgres|^bootstrap/init\.sql|^scripts/migrations/|^scripts/init-postgres|^scripts/archive-wal"; then
+            POSTGRES_CHANGED="true"
+            echo "✅ PostgreSQL config changed"
+          fi
+          
+          # Redis changes
+          if echo "$CHANGED_FILES" | grep -qE "^k8s/10-redis|^k8s/10a-redis"; then
+            REDIS_CHANGED="true"
+            echo "✅ Redis config changed"
+          fi
+          
+          # Kafka changes
+          if echo "$CHANGED_FILES" | grep -qE "^k8s/02-kafka|^k8s/02a-kafka|^k8s/03-kafka"; then
+            KAFKA_CHANGED="true"
+            echo "✅ Kafka config changed"
+          fi
+          
+          # Monitoring changes
+          if echo "$CHANGED_FILES" | grep -qE "^k8s/09-monitoring"; then
+            MONITORING_CHANGED="true"
+            echo "✅ Monitoring config changed"
+          fi
+          
+          # ArgoCD changes (Server, Repo Server, Application Controller)
+          if echo "$CHANGED_FILES" | grep -qE "^k8s/12-argocd|^k8s/13-argocd|^k8s/14-argocd"; then
+            ARGOCD_CHANGED="true"
+            echo "✅ ArgoCD config changed"
+          fi
+          
+          # HPA changes (Horizontal Pod Autoscaler)
+          if echo "$CHANGED_FILES" | grep -qE "^k8s/06-hpa|^k8s/06b-kafka-autoscaler|^k8s/06c-monitoring-hpa|^k8s/06d-argocd-hpa"; then
+            echo "✅ HPA config changed"
+          fi
+          
+          # Ingress changes
+          if echo "$CHANGED_FILES" | grep -qE "^k8s/08-ingress"; then
+            echo "✅ Ingress config changed"
+          fi
+          
+          # RBAC changes
+          if echo "$CHANGED_FILES" | grep -qE "^k8s/00-init-container-rbac"; then
+            echo "✅ RBAC config changed"
+          fi
+          
+          # Namespace changes
+          if echo "$CHANGED_FILES" | grep -qE "^k8s/00-namespace"; then
+            echo "✅ Namespace config changed"
+          fi
+          
+          # Any other k8s file changes (catch-all for ArgoCD sync)
+          K8S_FILES_CHANGED=$(echo "$CHANGED_FILES" | grep -qE "^k8s/" && echo "true" || echo "false")
+          if [ "$K8S_FILES_CHANGED" = "true" ]; then
+            echo "✅ Kubernetes config files changed (will trigger ArgoCD sync)"
+          fi
+          
+          # Export flags
+          echo "backend_changed=${BACKEND_CHANGED}" >> $GITHUB_OUTPUT
+          echo "frontend_changed=${FRONTEND_CHANGED}" >> $GITHUB_OUTPUT
+          echo "event_processor_changed=${EVENT_PROCESSOR_CHANGED}" >> $GITHUB_OUTPUT
+          echo "postgres_changed=${POSTGRES_CHANGED}" >> $GITHUB_OUTPUT
+          echo "redis_changed=${REDIS_CHANGED}" >> $GITHUB_OUTPUT
+          echo "kafka_changed=${KAFKA_CHANGED}" >> $GITHUB_OUTPUT
+          echo "monitoring_changed=${MONITORING_CHANGED}" >> $GITHUB_OUTPUT
+          echo "argocd_changed=${ARGOCD_CHANGED}" >> $GITHUB_OUTPUT
+          echo "k8s_files_changed=${K8S_FILES_CHANGED}" >> $GITHUB_OUTPUT
+          echo "timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+      
+      - name: Build and push backend
+        id: build-backend
+        if: steps.detect-all-changes.outputs.backend_changed == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ./back
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Output image info
-        run: |
-          echo "Backend image built and pushed:"
-          echo "Tags: ${{ steps.meta.outputs.tags }}"
-          echo "Version: ${{ steps.meta.outputs.version }}"
-
-  build-frontend:
-    name: Build Frontend Image
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.frontend_changed == 'true'
-    outputs:
-      image_tag: ${{ steps.meta.outputs.version }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Extract metadata for frontend
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.ECR_REGISTRY }}/finans-frontend
           tags: |
-            type=sha,prefix=,suffix=,format=short
-            type=raw,value=latest
+            ${{ steps.ecr-repos.outputs.backend_repo }}:${{ github.sha }}
+            ${{ steps.ecr-repos.outputs.backend_repo }}:latest
+          cache-from: type=registry,ref=${{ steps.ecr-repos.outputs.backend_repo }}:latest
+          cache-to: type=inline
+      
+      - name: Get backend image digest
+        id: backend-digest
+        if: steps.build-backend.outcome == 'success' && steps.detect-all-changes.outputs.backend_changed == 'true'
+        run: |
+          # Wait a moment for ECR to update
+          sleep 2
+          if command -v aws >/dev/null 2>&1; then
+          DIGEST=$(aws ecr describe-images \
+            --repository-name finans-asistan-backend-production \
+            --image-ids imageTag=latest \
+            --region ${AWS_REGION} \
+            --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageDigest' \
+            --output text 2>/dev/null || echo "")
+          if [ -n "$DIGEST" ] && [ "$DIGEST" != "None" ]; then
+            echo "backend_digest=${DIGEST}" >> $GITHUB_OUTPUT
+            echo "✅ Backend image digest: ${DIGEST:0:20}..."
+          else
+            echo "⚠️  Could not get backend image digest, will trigger restart anyway"
+              echo "backend_digest=" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "⚠️  aws CLI yok, backend digest alınamadı; restart anotasyonu yine eklenecek."
+            echo "backend_digest=" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Set FRONTEND_API_URL (secret or default)
+        run: |
+          API_URL="${FRONTEND_API_URL}"
+          if [ -z "$API_URL" ]; then
+            API_URL="https://finansasistan.com"
+            echo "ℹ️ FRONTEND_API_URL secret bulunamadı, varsayılan kullanılacak: $API_URL"
+          else
+            echo "✅ FRONTEND_API_URL secret yüklendi."
+          fi
+          echo "FRONTEND_API_URL=$API_URL" >> $GITHUB_ENV
+        env:
+          FRONTEND_API_URL: ${{ secrets.FRONTEND_API_URL }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push frontend image
+      - name: Build and push frontend
+        id: build-frontend
+        if: steps.detect-all-changes.outputs.frontend_changed == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ./front
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Output image info
-        run: |
-          echo "Frontend image built and pushed:"
-          echo "Tags: ${{ steps.meta.outputs.tags }}"
-          echo "Version: ${{ steps.meta.outputs.version }}"
-
-  build-event-processor:
-    name: Build Event Processor Image
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.event_processor_changed == 'true'
-    outputs:
-      image_tag: ${{ steps.meta.outputs.version }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Extract metadata for event processor
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.ECR_REGISTRY }}/finans-event-processor
           tags: |
-            type=sha,prefix=,suffix=,format=short
-            type=raw,value=latest
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push event processor image
+            ${{ steps.ecr-repos.outputs.frontend_repo }}:${{ github.sha }}
+            ${{ steps.ecr-repos.outputs.frontend_repo }}:latest
+          # DISABLE CACHE to ensure fresh builds every time
+          # This guarantees code changes are always included
+          no-cache: true
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            GIT_COMMIT=${{ github.sha }}
+            GIT_COMMIT_SHORT=${{ github.sha }}
+            REACT_APP_API_URL=${{ env.FRONTEND_API_URL }}
+        env:
+          FRONTEND_API_URL: ${{ env.FRONTEND_API_URL }}
+      
+      - name: Get frontend image digest
+        id: frontend-digest
+        if: steps.build-frontend.outcome == 'success' && steps.detect-all-changes.outputs.frontend_changed == 'true'
+        run: |
+          # Wait a moment for ECR to update
+          sleep 2
+          if command -v aws >/dev/null 2>&1; then
+          DIGEST=$(aws ecr describe-images \
+            --repository-name finans-asistan-frontend-production \
+            --image-ids imageTag=latest \
+            --region ${AWS_REGION} \
+            --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageDigest' \
+            --output text 2>/dev/null || echo "")
+          if [ -n "$DIGEST" ] && [ "$DIGEST" != "None" ]; then
+            echo "frontend_digest=${DIGEST}" >> $GITHUB_OUTPUT
+            echo "✅ Frontend image digest: ${DIGEST:0:20}..."
+          else
+            echo "⚠️  Could not get frontend image digest, will trigger restart anyway"
+              echo "frontend_digest=" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "⚠️  aws CLI yok, frontend digest alınamadı; restart anotasyonu yine eklenecek."
+            echo "frontend_digest=" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Build and push event-processor
+        id: build-event-processor
+        if: steps.detect-all-changes.outputs.event_processor_changed == 'true'
         uses: docker/build-push-action@v5
         with:
-          context: ./services/event-processor
+          context: ./
+          file: ./services/event-processor/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Output image info
+          tags: |
+            ${{ steps.ecr-repos.outputs.event_processor_repo }}:${{ github.sha }}
+            ${{ steps.ecr-repos.outputs.event_processor_repo }}:latest
+          cache-from: type=registry,ref=${{ steps.ecr-repos.outputs.event_processor_repo }}:latest
+          cache-to: type=inline
+      
+      - name: Get event-processor image digest
+        id: event-processor-digest
+        if: steps.build-event-processor.outcome == 'success' && steps.detect-all-changes.outputs.event_processor_changed == 'true'
         run: |
-          echo "Event Processor image built and pushed:"
-          echo "Tags: ${{ steps.meta.outputs.tags }}"
-          echo "Version: ${{ steps.meta.outputs.version }}"
-
-  deploy-to-k8s:
-    name: Deploy to Kubernetes
-    runs-on: ubuntu-latest
-    needs: [detect-changes, build-backend, build-frontend, build-event-processor]
-    if: |
-      always() && 
-      needs.detect-changes.outputs.any_changed == 'true' &&
-      !contains(needs.*.result, 'failure')
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Upload deployment trigger to S3
+          # Wait a moment for ECR to update
+          sleep 2
+          if command -v aws >/dev/null 2>&1; then
+          DIGEST=$(aws ecr describe-images \
+            --repository-name finans-asistan-event-processor-production \
+            --image-ids imageTag=latest \
+            --region ${AWS_REGION} \
+            --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageDigest' \
+            --output text 2>/dev/null || echo "")
+          if [ -n "$DIGEST" ] && [ "$DIGEST" != "None" ]; then
+            echo "event_processor_digest=${DIGEST}" >> $GITHUB_OUTPUT
+            echo "✅ Event-processor image digest: ${DIGEST:0:20}..."
+          else
+            echo "⚠️  Could not get event-processor image digest, will trigger restart anyway"
+              echo "event_processor_digest=" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "⚠️  aws CLI yok, event-processor digest alınamadı; restart anotasyonu yine eklenecek."
+            echo "event_processor_digest=" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Cleanup old ECR images and artifacts
+        if: steps.login-ecr.outcome == 'success'
+        continue-on-error: true
         run: |
-          # Create deployment info
-          DEPLOY_INFO=$(cat <<EOF
-          {
-            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "commit": "${{ github.sha }}",
-            "branch": "${{ github.ref_name }}",
-            "backend_changed": ${{ needs.detect-changes.outputs.backend_changed }},
-            "frontend_changed": ${{ needs.detect-changes.outputs.frontend_changed }},
-            "event_processor_changed": ${{ needs.detect-changes.outputs.event_processor_changed }},
-            "backend_tag": "${{ needs.build-backend.outputs.image_tag }}",
-            "frontend_tag": "${{ needs.build-frontend.outputs.image_tag }}",
-            "event_processor_tag": "${{ needs.build-event-processor.outputs.image_tag }}"
-          }
-          EOF
+          echo "🧹 Starting project cleanup..."
+          
+          echo "AWS CLI yoksa cleanup atlanacak"
+          if ! command -v aws >/dev/null 2>&1; then
+            echo "⚠️  aws CLI bulunamadı, ECR cleanup atlandı"
+            exit 0
+          fi
+          
+          # Keep last 10 images per repository, delete older ones
+          REPOS=(
+            "finans-asistan-backend-production"
+            "finans-asistan-frontend-production"
+            "finans-asistan-event-processor-production"
           )
           
-          echo "$DEPLOY_INFO" > /tmp/deploy-trigger.json
-          cat /tmp/deploy-trigger.json
+          for REPO in "${REPOS[@]}"; do
+            echo "Cleaning up ECR repository: ${REPO}"
+            
+            # Get all images sorted by push date (newest first) with digest
+            # Use imageDigest for more reliable deletion
+            # Get images as JSON for better parsing
+            IMAGES_JSON=$(aws ecr describe-images \
+              --repository-name "${REPO}" \
+              --region ${AWS_REGION} \
+              --query 'sort_by(imageDetails,&imagePushedAt)[*]' \
+              --output json 2>/dev/null || echo "[]")
+            
+            if [ "$IMAGES_JSON" = "[]" ] || [ -z "$IMAGES_JSON" ]; then
+              echo "  No images found in ${REPO}"
+              continue
+            fi
+            
+            # Count total images (using jq for JSON parsing, available in GitHub Actions)
+            TOTAL_IMAGES=$(echo "$IMAGES_JSON" | jq 'length' 2>/dev/null || echo "0")
+            
+            if [ "$TOTAL_IMAGES" -eq "0" ]; then
+              echo "  No images found in ${REPO}"
+              continue
+            fi
+            
+            echo "  Total images: ${TOTAL_IMAGES}"
+            
+            # Keep latest 10 images (including 'latest' tag)
+            KEEP_COUNT=10
+            if [ "$TOTAL_IMAGES" -le "$KEEP_COUNT" ]; then
+              echo "  Only ${TOTAL_IMAGES} images exist, keeping all"
+              continue
+            fi
+            
+            # Get images to delete (oldest first, skip last KEEP_COUNT)
+            # Use jq to extract digests of images to delete (no Python needed!)
+            set +e
+            # First, get all old images (excluding latest 10)
+            OLD_IMAGES=$(echo "$IMAGES_JSON" | jq -r '
+              sort_by(.imagePushedAt) 
+              | .[0:(length-10)] 
+              | .[] 
+              | select(.imageDigest != null and .imageDigest != "")
+              | [.imageDigest, (.imageTags // [] | join(","))]
+              | @tsv
+            ' 2>&1)
+            JQ_EXIT=$?
+            set -e
+            
+            if [ "$JQ_EXIT" != "0" ]; then
+              echo "  ⚠️  jq error (exit code: $JQ_EXIT), skipping cleanup for ${REPO}"
+              if [ -n "$OLD_IMAGES" ]; then
+                echo "  Error details: ${OLD_IMAGES:0:200}"
+              fi
+              continue
+            fi
+            
+            if [ -z "$OLD_IMAGES" ]; then
+              echo "  No old images to check"
+              continue
+            fi
+            
+            # Filter out images with 'latest' tag using bash
+            IMAGES_TO_DELETE=""
+            while IFS=$'\t' read -r digest tags; do
+              if [ -n "$digest" ] && [ "$digest" != "null" ]; then
+                # Check if tags contain 'latest'
+                if [ -z "$tags" ] || [ "$tags" = "null" ] || ! echo "$tags" | grep -q "latest"; then
+                  IMAGES_TO_DELETE="${IMAGES_TO_DELETE}${digest}\n"
+                fi
+              fi
+            done <<< "$OLD_IMAGES"
+            
+            # Remove trailing newline
+            IMAGES_TO_DELETE=$(echo -e "$IMAGES_TO_DELETE" | grep -v '^$')
+            
+            if [ -z "$IMAGES_TO_DELETE" ]; then
+              echo "  No images to delete (all have 'latest' tag or already cleaned)"
+              continue
+            fi
+            
+            DELETE_COUNT=$(echo "$IMAGES_TO_DELETE" | grep -v '^$' | wc -l)
+            
+            if [ "$DELETE_COUNT" -eq 0 ]; then
+              echo "  No images to delete"
+              continue
+            fi
+            
+            echo "  Deleting ${DELETE_COUNT} old images..."
+            DELETED=0
+            FAILED=0
+            
+            # Disable exit on error for delete loop (some images may fail to delete)
+            set +e
+            while IFS= read -r digest; do
+              if [ -n "$digest" ] && [ "$digest" != "null" ] && [ "$digest" != "None" ]; then
+                # Delete image by digest (more reliable than tag)
+                DELETE_RESULT=$(aws ecr batch-delete-image \
+                  --repository-name "${REPO}" \
+                  --image-ids "imageDigest=${digest}" \
+                  --region ${AWS_REGION} 2>&1)
+                DELETE_EXIT=$?
+                
+                if [ "$DELETE_EXIT" -eq 0 ] && echo "$DELETE_RESULT" | grep -q "imageIds"; then
+                  DELETED=$((DELETED + 1))
+                  echo "    ✅ Deleted: ${digest:0:20}..."
+                else
+                  # Extract error message for debugging
+                  ERROR_MSG=$(echo "$DELETE_RESULT" | grep -iE "error|exception|failed" | head -1 || echo "Unknown error")
+                  FAILED=$((FAILED + 1))
+                  echo "    ⚠️  Failed to delete: ${digest:0:20}... ($(echo "$ERROR_MSG" | cut -c1-60))"
+                fi
+              fi
+            done <<< "$IMAGES_TO_DELETE"
+            set -e
+            
+            echo "  Cleanup complete for ${REPO}: Deleted ${DELETED}, Failed ${FAILED}"
+          done
           
-          # Upload to S3 trigger file
-          aws s3 cp /tmp/deploy-trigger.json s3://jstlearn-finans-backup/deploy-triggers/latest.json
-          aws s3 cp /tmp/deploy-trigger.json "s3://jstlearn-finans-backup/deploy-triggers/$(date -u +%Y%m%d-%H%M%S).json"
+          # Cleanup old GitHub Actions artifacts (keep last 10)
+          echo ""
+          echo "Cleaning up GitHub Actions artifacts..."
+          # Note: GitHub CLI (gh) is pre-installed in GitHub Actions runners
+          # Using GitHub API directly with curl for artifact cleanup
+          ARTIFACTS_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?per_page=100" || echo '{"artifacts":[]}')
           
-          echo "Deployment trigger uploaded to S3"
-
-      - name: Notify deployment status
-        if: always()
+          # Extract artifact IDs, sort by created_at, keep last 10, delete rest
+          ARTIFACT_IDS=$(echo "$ARTIFACTS_JSON" | jq -r '.artifacts | sort_by(.created_at) | reverse | .[10:] | .[].id' 2>/dev/null || echo "")
+          
+          if [ -n "$ARTIFACT_IDS" ]; then
+            ARTIFACT_COUNT=$(echo "$ARTIFACT_IDS" | grep -v '^$' | wc -l)
+            echo "  Found ${ARTIFACT_COUNT} old artifacts to delete"
+            
+            DELETED=0
+            while IFS= read -r artifact_id; do
+              if [ -n "$artifact_id" ] && [ "$artifact_id" != "null" ]; then
+                if curl -s -X DELETE \
+                  -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                  "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${artifact_id}" > /dev/null 2>&1; then
+                  DELETED=$((DELETED + 1))
+                  echo "    ✅ Deleted artifact: ${artifact_id}"
+                else
+                  echo "    ⚠️  Failed to delete artifact: ${artifact_id}"
+                fi
+              fi
+            done <<< "$ARTIFACT_IDS"
+            
+            echo "  Deleted ${DELETED} old artifacts"
+          else
+            echo "  No old artifacts to delete"
+          fi
+          
+          echo "✅ Project cleanup completed"
+      
+      - name: Install PyYAML for YAML manipulation
+        if: steps.login-ecr.outcome == 'success'
         run: |
-          echo "=== Deployment Summary ==="
-          echo "Commit: ${{ github.sha }}"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Backend changed: ${{ needs.detect-changes.outputs.backend_changed }}"
-          echo "Frontend changed: ${{ needs.detect-changes.outputs.frontend_changed }}"
-          echo "Event Processor changed: ${{ needs.detect-changes.outputs.event_processor_changed }}"
-          echo "Status: ${{ job.status }}"
-
-  security-scan:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend]
-    if: |
-      always() &&
-      (needs.build-backend.result == 'success' || needs.build-frontend.result == 'success')
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Install Trivy
-        run: |
-          sudo apt-get install wget apt-transport-https gnupg lsb-release -y
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install trivy -y
-
-      - name: Scan backend image
-        if: needs.build-backend.result == 'success'
-        run: |
-          trivy image \
-            --exit-code 0 \
-            --severity HIGH,CRITICAL \
-            --format table \
-            ${{ env.ECR_REGISTRY }}/finans-backend:latest
-        continue-on-error: true
-
-      - name: Scan frontend image
-        if: needs.build-frontend.result == 'success'
-        run: |
-          trivy image \
-            --exit-code 0 \
-            --severity HIGH,CRITICAL \
-            --format table \
-            ${{ env.ECR_REGISTRY }}/finans-frontend:latest
-        continue-on-error: true
-
-  notify-slack:
-    name: Notify Slack
-    runs-on: ubuntu-latest
-    needs: [deploy-to-k8s]
-    if: always()
-    steps:
-      - name: Send Slack notification
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ needs.deploy-to-k8s.result }}
-          fields: repo,message,commit,author,action,eventName,ref,workflow
+          if ! python3 -c "import yaml" 2>/dev/null; then
+            echo "📦 Installing python3-yaml system package..."
+            sudo apt-get update -qq && sudo apt-get install -y python3-yaml
+            if [ $? -ne 0 ]; then
+              echo "❌ python3-yaml installation failed"
+              exit 1
+            fi
+            echo "✅ PyYAML installed successfully"
+          else
+            echo "✅ PyYAML already installed"
+          fi
+      
+      - name: Update Kubernetes deployments to trigger pod restart
+        if: steps.login-ecr.outcome == 'success' && (steps.detect-all-changes.outputs.frontend_changed == 'true' || steps.detect-all-changes.outputs.backend_changed == 'true' || steps.detect-all-changes.outputs.event_processor_changed == 'true' || steps.build-frontend.outcome == 'success' || steps.build-backend.outcome == 'success' || steps.build-event-processor.outcome == 'success')
+        id: update-images
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        continue-on-error: true
+          TIMESTAMP: ${{ steps.detect-all-changes.outputs.timestamp }}
+          COMMIT_SHA: ${{ steps.detect-all-changes.outputs.commit_sha }}
+          BACKEND_CHANGED: ${{ steps.detect-all-changes.outputs.backend_changed }}
+          FRONTEND_CHANGED: ${{ steps.detect-all-changes.outputs.frontend_changed }}
+          EVENT_PROCESSOR_CHANGED: ${{ steps.detect-all-changes.outputs.event_processor_changed }}
+          POSTGRES_CHANGED: ${{ steps.detect-all-changes.outputs.postgres_changed }}
+          REDIS_CHANGED: ${{ steps.detect-all-changes.outputs.redis_changed }}
+          KAFKA_CHANGED: ${{ steps.detect-all-changes.outputs.kafka_changed }}
+          MONITORING_CHANGED: ${{ steps.detect-all-changes.outputs.monitoring_changed }}
+          ARGOCD_CHANGED: ${{ steps.detect-all-changes.outputs.argocd_changed }}
+          K8S_FILES_CHANGED: ${{ steps.detect-all-changes.outputs.k8s_files_changed }}
+          BACKEND_DIGEST: ${{ steps.backend-digest.outputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ steps.frontend-digest.outputs.frontend_digest }}
+          EVENT_PROCESSOR_DIGEST: ${{ steps.event-processor-digest.outputs.event_processor_digest }}
+          BUILD_FRONTEND_OUTCOME: ${{ steps.build-frontend.outcome }}
+          BUILD_BACKEND_OUTCOME: ${{ steps.build-backend.outcome }}
+          BUILD_EVENT_PROCESSOR_OUTCOME: ${{ steps.build-event-processor.outcome }}
+        run: |
+          # Images are always tagged with 'latest', so we only need to trigger pod restart
+          # by updating annotations. This ensures pods pull the new 'latest' image.
+          CHANGED_FILES=""
+          
+          # Function to check if image changed and trigger pod restart
+          check_and_update_deployment() {
+            local file=$1
+            local service_name=$2
+            local new_digest=$3
+            local should_update=false
+            
+            if [ ! -f "$file" ]; then
+              echo "⚠️  Deployment file not found: $file"
+              return 1
+            fi
+            
+            # Replace PLACEHOLDER_ECR_REGISTRY with actual ECR registry URL (if present)
+            sed -i "s|PLACEHOLDER_ECR_REGISTRY|${ECR_REGISTRY}|g" "$file"
+            
+            # Ensure image uses 'latest' tag (digest is stored in annotation, not in image URL)
+            # Kubernetes doesn't support image:tag@sha256:digest format - use only :latest tag
+            sed -i "s|image:.*finans-asistan-${service_name}.*|image: ${ECR_REGISTRY}/finans-asistan-${service_name}-production:latest|g" "$file"
+            
+            # Get current image digest from deployment annotation (if exists)
+            local current_digest=$(grep -A 10 "annotations:" "$file" | grep "app.finans-asistan.io/image-digest:" | sed 's/.*image-digest: *"\([^"]*\)".*/\1/' || echo "")
+            
+            # ALWAYS update deployment when service code changed, even if digest is same or missing
+            # This ensures ArgoCD sync will trigger pod restart with latest image
+            # IMAGE_DIGEST env var will be updated to change spec.template and trigger pod restart
+            if [ -z "$new_digest" ]; then
+              echo "⚠️  No new digest for ${service_name}, but code changed - updating IMAGE_DIGEST env var to trigger restart"
+              update_deployment_annotations "$file" "$TIMESTAMP" "$COMMIT_SHA" ""
+              echo "✅ Updated ${service_name} deployment (no digest available, but IMAGE_DIGEST env var updated):"
+              echo "   Image: ${ECR_REGISTRY}/finans-asistan-${service_name}-production:latest"
+              echo "   IMAGE_DIGEST env var updated → spec.template changed → pod restart will be triggered"
+              should_update=true
+            elif [ "$current_digest" = "$new_digest" ]; then
+              # Digest same but service code changed - still update to force pod restart
+              # This is critical: ArgoCD sync needs to see deployment change to trigger restart
+              # Update IMAGE_DIGEST env var to change spec.template and trigger pod restart
+              echo "🔄 ${service_name} image digest unchanged (${new_digest:0:20}...), but service code changed"
+              echo "   Updating deployment annotations and IMAGE_DIGEST env var to force pod restart via ArgoCD sync"
+              update_deployment_annotations "$file" "$TIMESTAMP" "$COMMIT_SHA" "$new_digest"
+              echo "✅ Updated ${service_name} deployment to trigger restart (digest unchanged but code changed):"
+              echo "   Image: ${ECR_REGISTRY}/finans-asistan-${service_name}-production:latest@${new_digest:0:20}..."
+              echo "   IMAGE_DIGEST env var updated → spec.template changed → pod restart will be triggered"
+              should_update=true
+            else
+              echo "🔄 ${service_name} image changed!"
+              if [ -n "$current_digest" ]; then
+                echo "   Old digest: ${current_digest:0:20}..."
+              else
+                echo "   Old digest: (not found)"
+              fi
+              echo "   New digest: ${new_digest:0:20}..."
+              
+              # Update deployment with new digest annotation and trigger restart
+              update_deployment_annotations "$file" "$TIMESTAMP" "$COMMIT_SHA" "$new_digest"
+              
+              echo "✅ Updated ${service_name} deployment to trigger restart:"
+              echo "   Image: ${ECR_REGISTRY}/finans-asistan-${service_name}-production:latest@${new_digest:0:20}..."
+              echo "   Digest: ${new_digest:0:20}..."
+              echo "   Timestamp: ${TIMESTAMP}"
+              echo "   Commit: ${COMMIT_SHA:0:7}"
+              should_update=true
+            fi
+            
+            if [ "$should_update" = "true" ]; then
+              return 0
+            else
+              return 1
+            fi
+          }
+          
+          # Function to update deployment annotations (for config changes and image digest)
+          # This forces ArgoCD to restart the deployment by changing annotations
+          # Uses Python for reliable YAML manipulation
+          update_deployment_annotations() {
+            local file=$1
+            local timestamp=$2
+            local commit_sha=$3
+            local image_digest=$4
+            
+            if [ ! -f "$file" ]; then
+              echo "⚠️  File not found: $file"
+              return 1
+            fi
+            
+            # PostgreSQL StatefulSet can now be updated with the improved Python script
+            # The script handles all Deployment and StatefulSet resources correctly
+            
+            # Use Python to reliably update YAML annotations
+            # This is the only method - if it fails, the workflow will fail
+            if ! python3 -c "import yaml" 2>/dev/null; then
+              echo "❌ PyYAML is not available. Cannot update YAML annotations."
+              return 1
+            fi
+            
+            # Create temporary Python script file to avoid YAML syntax issues
+            local py_script=$(mktemp)
+            {
+              echo 'import sys'
+              echo 'import yaml'
+              echo 'from datetime import datetime'
+              echo ''
+              echo 'try:'
+              echo '    file_path = sys.argv[1]'
+              echo '    timestamp = sys.argv[2]'
+              echo '    commit_sha = sys.argv[3]'
+              echo '    image_digest = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else ""'
+              echo '    '
+              echo '    # Read YAML file (may contain multiple documents separated by ---)'
+              echo '    with open(file_path, "r", encoding="utf-8") as f:'
+              echo '        content = f.read()'
+              echo '        # Load all documents - update ALL Deployment and StatefulSet resources'
+              echo '        documents = list(yaml.safe_load_all(content))'
+              echo '    '
+              echo '    if not documents:'
+              echo '        print(f"❌ No valid YAML document found in {file_path}")'
+              echo '        sys.exit(1)'
+              echo '    '
+              echo '    # Update ALL Deployment and StatefulSet resources in the file'
+              echo '    updated_count = 0'
+              echo '    for data in documents:'
+              echo '        if not data:'
+              echo '            continue'
+              echo '        '
+              echo '        # Only process Deployment and StatefulSet resources'
+              echo '        kind = data.get("kind", "")'
+              echo '        if kind not in ["Deployment", "StatefulSet"]:'
+              echo '            continue'
+              echo '        '
+              echo '        resource_name = data.get("metadata", {}).get("name", "unknown")'
+              echo '        print(f"🔄 Updating {kind} {resource_name}...")'
+              echo '        '
+              echo '        # Navigate to spec.template.metadata.annotations'
+              echo '        if "spec" in data and "template" in data["spec"] and "metadata" in data["spec"]["template"]:'
+              echo '            if "annotations" not in data["spec"]["template"]["metadata"]:'
+              echo '                data["spec"]["template"]["metadata"]["annotations"] = {}'
+              echo '            '
+              echo '            annotations = data["spec"]["template"]["metadata"]["annotations"]'
+              echo '            '
+              echo '            # Update annotations with timestamp and commit SHA'
+              echo '            annotations["kubectl.kubernetes.io/restartedAt"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")'
+              echo '            annotations["deployment.kubernetes.io/revision"] = f"{timestamp}-{commit_sha[:7]}"'
+              echo '            annotations["deployment.kubernetes.io/deployment-timestamp"] = timestamp'
+              echo '            annotations["deployment.kubernetes.io/commit-sha"] = commit_sha'
+              echo '            '
+              echo '            # Update image digest if provided'
+              echo '            if image_digest and image_digest.strip():'
+              echo '                annotations["app.finans-asistan.io/image-digest"] = image_digest'
+              echo '            '
+              echo '            # CRITICAL: Update spec.template.spec to force pod restart'
+              echo '            # Kubernetes only restarts pods when spec.template changes, not just annotations'
+              echo '            # Add/update IMAGE_DIGEST env var in ALL containers to trigger restart'
+              echo '            if "spec" in data and "template" in data["spec"] and "spec" in data["spec"]["template"]:'
+              echo '                template_spec = data["spec"]["template"]["spec"]'
+              echo '                if "containers" in template_spec:'
+              echo '                    # Update IMAGE_DIGEST env var in ALL containers'
+              echo '                    for container in template_spec["containers"]:'
+              echo '                        if "env" not in container:'
+              echo '                            container["env"] = []'
+              echo '                        '
+              echo '                        # Find and update IMAGE_DIGEST env var, or add it'
+              echo '                        env_found = False'
+              echo '                        for env_var in container["env"]:'
+              echo '                            if env_var.get("name") == "IMAGE_DIGEST":'
+              echo '                                if image_digest and image_digest.strip():'
+              echo '                                    env_var["value"] = image_digest'
+              echo '                                else:'
+              echo '                                    # Use timestamp to force pod restart when digest is unavailable'
+              echo '                                    env_var["value"] = timestamp if timestamp and timestamp.strip() else commit_sha'
+              echo '                                env_found = True'
+              echo '                                break'
+              echo '                        if not env_found:'
+              echo '                            if image_digest and image_digest.strip():'
+              echo '                                container["env"].append({"name": "IMAGE_DIGEST", "value": image_digest})'
+              echo '                            else:'
+              echo '                                # Use timestamp to force pod restart when digest is unavailable'
+              echo '                                container["env"].append({"name": "IMAGE_DIGEST", "value": timestamp if timestamp and timestamp.strip() else commit_sha})'
+              echo '            '
+              echo '            updated_count += 1'
+              echo '            print(f"✅ Updated {kind} {resource_name}")'
+              echo '    '
+              echo '    if updated_count == 0:'
+              echo '        print(f"⚠️  No Deployment or StatefulSet resources found in {file_path}")'
+              echo '        sys.exit(0)'
+              echo '    '
+              echo '    # Write back to file with all documents'
+              echo '    import os'
+              echo '    with open(file_path, "w", encoding="utf-8") as f:'
+              echo '        first = True'
+              echo '        for doc in documents:'
+              echo '            if not first:'
+              echo '                f.write("---")'
+              echo '                f.write(os.linesep)'
+              echo '            yaml.dump(doc, f, default_flow_style=False, sort_keys=False, allow_unicode=True, width=1000, indent=2)'
+              echo '            first = False'
+              echo '    '
+              echo '    print(f"✅ Successfully updated {updated_count} resource(s) in {file_path}")'
+              echo '    if image_digest and image_digest.strip():'
+              echo '        print(f"   - image-digest annotation: {image_digest[:20]}...")'
+              echo '        print(f"   - IMAGE_DIGEST env var: {image_digest[:20]}...")'
+              echo '    print(f"   - spec.template updated → pod restart will be triggered")'
+              echo '    sys.exit(0)'
+              echo '        '
+              echo 'except Exception as e:'
+              echo '    print(f"❌ Error updating annotations with Python: {e}")'
+              echo '    import traceback'
+              echo '    traceback.print_exc()'
+              echo '    sys.exit(1)'
+            } > "$py_script"
+            
+            python3 "$py_script" "${file}" "${timestamp}" "${commit_sha}" "${image_digest}"
+            local exit_code=$?
+            rm -f "$py_script"
+            
+            if [ $exit_code -ne 0 ]; then
+              echo "❌ Failed to update YAML annotations"
+              return 1
+            fi
+            
+            return 0
+          }
+          
+          # Check and update deployments based on image digest changes
+          # Only update deployments for services that actually changed
+          echo "🔍 Checking image digest changes and updating deployments..."
+          
+          # Backend deployment - update if backend changed OR build was successful
+          # CRITICAL: Update deployment even if build step was skipped (e.g., if condition failed)
+          # This ensures IMAGE_DIGEST env var is always updated when backend code changes
+          # and pod restart is triggered via spec.template change
+          if [ "$BACKEND_CHANGED" = "true" ] || [ -n "$BACKEND_DIGEST" ] || [ "$BUILD_BACKEND_OUTCOME" = "success" ] || [ "$BUILD_BACKEND_OUTCOME" = "skipped" ]; then
+            if [ "$BACKEND_CHANGED" = "true" ] && [ "$BUILD_BACKEND_OUTCOME" != "success" ]; then
+              echo "🔄 Backend code changed but build step was skipped, updating deployment anyway..."
+            elif [ "$BACKEND_CHANGED" = "true" ]; then
+            echo "🔄 Backend changed, updating deployment to use latest image..."
+            elif [ -n "$BACKEND_DIGEST" ]; then
+              echo "🔄 Backend build successful, updating deployment to use latest image (digest: ${BACKEND_DIGEST:0:20}...)..."
+            else
+              echo "🔄 Backend build successful, updating deployment to trigger restart (ensuring latest image is pulled)..."
+            fi
+            check_and_update_deployment "k8s/04-backend-deployment.yaml" "backend" "$BACKEND_DIGEST"
+            if [ $? -eq 0 ]; then
+              CHANGED_FILES="${CHANGED_FILES} k8s/04-backend-deployment.yaml"
+              echo "✅ Backend deployment file updated and will be committed"
+            fi
+          else
+            echo "⏭️  Backend unchanged and no build, skipping deployment update"
+          fi
+          
+          # Frontend deployment - ALWAYS update if frontend changed OR build was successful
+          # CRITICAL: Update deployment even if build step was skipped (e.g., if condition failed)
+          # This ensures IMAGE_DIGEST env var is always updated when frontend code changes
+          # and pod restart is triggered via spec.template change
+          if [ "$FRONTEND_CHANGED" = "true" ] || [ -n "$FRONTEND_DIGEST" ] || [ "$BUILD_FRONTEND_OUTCOME" = "success" ] || [ "$BUILD_FRONTEND_OUTCOME" = "skipped" ]; then
+            if [ "$FRONTEND_CHANGED" = "true" ] && [ "$BUILD_FRONTEND_OUTCOME" != "success" ]; then
+              echo "🔄 Frontend code changed but build step was skipped, updating deployment anyway..."
+            elif [ "$FRONTEND_CHANGED" = "true" ]; then
+              echo "🔄 Frontend code changed, updating deployment to use latest image..."
+            elif [ -n "$FRONTEND_DIGEST" ]; then
+              echo "🔄 Frontend build successful, updating deployment to use latest image (digest: ${FRONTEND_DIGEST:0:20}...)..."
+            else
+              echo "🔄 Frontend build successful, updating deployment to trigger restart (ensuring latest image is pulled)..."
+            fi
+            check_and_update_deployment "k8s/05-frontend-deployment.yaml" "frontend" "$FRONTEND_DIGEST"
+            if [ $? -eq 0 ]; then
+              CHANGED_FILES="${CHANGED_FILES} k8s/05-frontend-deployment.yaml"
+              echo "✅ Frontend deployment file updated and will be committed"
+            fi
+          else
+            echo "⏭️  Frontend unchanged and no build, skipping deployment update"
+          fi
+          
+          # Event-processor deployment - update if event-processor changed OR build was successful
+          # CRITICAL: Update deployment even if build step was skipped (e.g., if condition failed)
+          # This ensures IMAGE_DIGEST env var is always updated when event-processor code changes
+          # and pod restart is triggered via spec.template change
+          if [ "$EVENT_PROCESSOR_CHANGED" = "true" ] || [ -n "$EVENT_PROCESSOR_DIGEST" ] || [ "$BUILD_EVENT_PROCESSOR_OUTCOME" = "success" ] || [ "$BUILD_EVENT_PROCESSOR_OUTCOME" = "skipped" ]; then
+            if [ "$EVENT_PROCESSOR_CHANGED" = "true" ] && [ "$BUILD_EVENT_PROCESSOR_OUTCOME" != "success" ]; then
+              echo "🔄 Event-processor code changed but build step was skipped, updating deployment anyway..."
+            elif [ "$EVENT_PROCESSOR_CHANGED" = "true" ]; then
+            echo "🔄 Event-processor changed, updating deployment to use latest image..."
+            elif [ -n "$EVENT_PROCESSOR_DIGEST" ]; then
+              echo "🔄 Event-processor build successful, updating deployment to use latest image (digest: ${EVENT_PROCESSOR_DIGEST:0:20}...)..."
+            else
+              echo "🔄 Event-processor build successful, updating deployment to trigger restart (ensuring latest image is pulled)..."
+            fi
+            check_and_update_deployment "k8s/11-event-processor.yaml" "event-processor" "$EVENT_PROCESSOR_DIGEST"
+            if [ $? -eq 0 ]; then
+              CHANGED_FILES="${CHANGED_FILES} k8s/11-event-processor.yaml"
+              echo "✅ Event-processor deployment file updated and will be committed"
+            fi
+          else
+            echo "⏭️  Event-processor unchanged and no build, skipping deployment update"
+          fi
+          
+          # Only add deployment files that were actually updated (removed the "always add" logic)
+          # This prevents unnecessary ArgoCD syncs for unchanged services
+          
+          echo "Changed files: ${CHANGED_FILES}"
+          
+          # Export CHANGED_FILES as output so commit step can use it
+          echo "changed_files=${CHANGED_FILES}" >> $GITHUB_OUTPUT
+          
+          # 🔍 DEBUG: Show deployment file changes
+          echo ""
+          echo "🔍 DEBUG: Deployment file changes (before commit):"
+          echo "=========================================="
+          for file in k8s/04-backend-deployment.yaml k8s/05-frontend-deployment.yaml k8s/11-event-processor.yaml; do
+            if [ -f "$file" ]; then
+              echo ""
+              echo "📄 File: $file"
+              echo "---"
+              echo "Image (should be 'latest'):"
+              grep "image:" "$file" | head -1 || echo "  ⚠️  No image found"
+              echo "Annotations:"
+              grep -A 5 "annotations:" "$file" | grep -E "restartedAt|revision|timestamp|commit-sha" || echo "  ⚠️  No critical annotations found"
+            fi
+          done
+          echo "=========================================="
+          echo ""
+          
+          # Check file changes for all config-based services
+          # PostgreSQL: Check for k8s files, bootstrap scripts, migrations
+          POSTGRES_FILES_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/01-postgres|^bootstrap/init\.sql|^scripts/migrations/|^scripts/init-postgres|^scripts/archive-wal" && echo "true" || echo "false")
+          
+          # Redis: Check for k8s files
+          REDIS_FILES_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/10-redis|^k8s/10a-redis" && echo "true" || echo "false")
+          
+          # Kafka: Check for k8s files
+          KAFKA_FILES_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/02-kafka|^k8s/02a-kafka|^k8s/03-kafka" && echo "true" || echo "false")
+          
+          # Monitoring: Check for k8s files (Prometheus, Grafana, AlertManager, Node Exporter, PostgreSQL Exporter, Redis Exporter, Kafka Exporter)
+          MONITORING_FILES_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/09-monitoring|^monitoring/" && echo "true" || echo "false")
+          
+          # ArgoCD: Check for k8s files
+          ARGOCD_FILES_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/12-argocd|^k8s/13-argocd|^k8s/14-argocd" && echo "true" || echo "false")
+          
+          # Cluster Autoscaler: Check for k8s files
+          CLUSTER_AUTOSCALER_FILES_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/07-cluster-autoscaler" && echo "true" || echo "false")
+          
+          # Update config-based services (add annotations to force restart)
+          # PostgreSQL: Update if config changed OR if related files changed
+          # NOTE: PostgreSQL StatefulSet has special YAML structure with command: blocks containing scripts
+          # We skip annotation updates for PostgreSQL to avoid YAML syntax errors
+          # ArgoCD will sync the file changes directly without needing annotation updates
+          if [ "$POSTGRES_CHANGED" = "true" ] || [ "$POSTGRES_FILES_CHANGED" = "true" ]; then
+            if [ "$POSTGRES_CHANGED" != "true" ] && [ "$POSTGRES_FILES_CHANGED" = "true" ]; then
+              echo "⚠️  PostgreSQL files changed but config change was not detected, updating anyway"
+            fi
+            # Update PostgreSQL StatefulSet annotations and IMAGE_DIGEST env var
+            update_deployment_annotations "k8s/01-postgres-statefulset.yaml" "$TIMESTAMP" "$COMMIT_SHA"
+            CHANGED_FILES="${CHANGED_FILES} k8s/01-postgres-statefulset.yaml"
+            echo "✅ PostgreSQL StatefulSet updated"
+          fi
+          
+          # Redis: Update if config changed OR if related files changed
+          if [ "$REDIS_CHANGED" = "true" ] || [ "$REDIS_FILES_CHANGED" = "true" ]; then
+            if [ "$REDIS_CHANGED" != "true" ] && [ "$REDIS_FILES_CHANGED" = "true" ]; then
+              echo "⚠️  Redis files changed but config change was not detected, updating anyway"
+            fi
+            update_deployment_annotations "k8s/10-redis.yaml" "$TIMESTAMP" "$COMMIT_SHA"
+            CHANGED_FILES="${CHANGED_FILES} k8s/10-redis.yaml"
+            echo "✅ Redis Deployment updated"
+          fi
+          
+          # Kafka: Update if config changed OR if related files changed
+          if [ "$KAFKA_CHANGED" = "true" ] || [ "$KAFKA_FILES_CHANGED" = "true" ]; then
+            if [ "$KAFKA_CHANGED" != "true" ] && [ "$KAFKA_FILES_CHANGED" = "true" ]; then
+              echo "⚠️  Kafka files changed but config change was not detected, updating anyway"
+            fi
+            # Kafka uses KafkaNodePool, update all related files
+            for file in k8s/02-kafka-cluster.yaml k8s/02a-kafka-nodepools.yaml k8s/03-kafka-topics.yaml; do
+              if [ -f "$file" ]; then
+                CHANGED_FILES="${CHANGED_FILES} ${file}"
+              fi
+            done
+            echo "✅ Kafka config updated"
+          fi
+          
+          # Monitoring: Update if config changed OR if related files changed
+          # This covers: Prometheus, Grafana, AlertManager, Node Exporter, PostgreSQL Exporter, Redis Exporter, Kafka Exporter
+          if [ "$MONITORING_CHANGED" = "true" ] || [ "$MONITORING_FILES_CHANGED" = "true" ]; then
+            if [ "$MONITORING_CHANGED" != "true" ] && [ "$MONITORING_FILES_CHANGED" = "true" ]; then
+              echo "⚠️  Monitoring files changed but config change was not detected, updating anyway"
+            fi
+            update_deployment_annotations "k8s/09-monitoring.yaml" "$TIMESTAMP" "$COMMIT_SHA"
+            CHANGED_FILES="${CHANGED_FILES} k8s/09-monitoring.yaml"
+            echo "✅ Monitoring config updated (Prometheus, Grafana, AlertManager, Node Exporter, PostgreSQL Exporter, Redis Exporter, Kafka Exporter)"
+          fi
+          
+          # ArgoCD: Update if config changed OR if related files changed
+          # This covers: ArgoCD Server, ArgoCD Repo Server, ArgoCD Application Controller
+          if [ "$ARGOCD_CHANGED" = "true" ] || [ "$ARGOCD_FILES_CHANGED" = "true" ]; then
+            if [ "$ARGOCD_CHANGED" != "true" ] && [ "$ARGOCD_FILES_CHANGED" = "true" ]; then
+              echo "⚠️  ArgoCD files changed but config change was not detected, updating anyway"
+            fi
+            # ArgoCD config changes
+            for file in k8s/12-argocd-install.yaml k8s/13-argocd-application.yaml k8s/14-argocd-config.yaml; do
+              if [ -f "$file" ]; then
+                CHANGED_FILES="${CHANGED_FILES} ${file}"
+              fi
+            done
+            echo "✅ ArgoCD config updated (ArgoCD Server, ArgoCD Repo Server, ArgoCD Application Controller)"
+          fi
+          
+          # Cluster Autoscaler: Update if related files changed
+          if [ "$CLUSTER_AUTOSCALER_FILES_CHANGED" = "true" ]; then
+            echo "⚠️  Cluster Autoscaler files changed, updating"
+            update_deployment_annotations "k8s/07-cluster-autoscaler.yaml" "$TIMESTAMP" "$COMMIT_SHA"
+            CHANGED_FILES="${CHANGED_FILES} k8s/07-cluster-autoscaler.yaml"
+            echo "✅ Cluster Autoscaler updated"
+          fi
+          
+          # HPA: Add all HPA files if changed (they don't need annotations, just need to be in CHANGED_FILES for ArgoCD sync)
+          HPA_FILES_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/06-hpa|^k8s/06b-kafka-autoscaler|^k8s/06c-monitoring-hpa|^k8s/06d-argocd-hpa" && echo "true" || echo "false")
+          if [ "$HPA_FILES_CHANGED" = "true" ]; then
+            echo "✅ HPA files changed, adding to sync list"
+            for file in k8s/06-hpa.yaml k8s/06b-kafka-autoscaler.yaml k8s/06c-monitoring-hpa.yaml k8s/06d-argocd-hpa.yaml; do
+              if [ -f "$file" ] && git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "^${file}$"; then
+                CHANGED_FILES="${CHANGED_FILES} ${file}"
+              fi
+            done
+          fi
+          
+          # Ingress: Add if changed
+          INGRESS_FILES_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/08-ingress" && echo "true" || echo "false")
+          if [ "$INGRESS_FILES_CHANGED" = "true" ]; then
+            echo "✅ Ingress files changed, adding to sync list"
+            if [ -f "k8s/08-ingress.yaml" ]; then
+              CHANGED_FILES="${CHANGED_FILES} k8s/08-ingress.yaml"
+            fi
+          fi
+          
+          # RBAC: Add if changed
+          RBAC_FILES_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/00-init-container-rbac" && echo "true" || echo "false")
+          if [ "$RBAC_FILES_CHANGED" = "true" ]; then
+            echo "✅ RBAC files changed, adding to sync list"
+            if [ -f "k8s/00-init-container-rbac.yaml" ]; then
+              CHANGED_FILES="${CHANGED_FILES} k8s/00-init-container-rbac.yaml"
+            fi
+          fi
+          
+          # Namespace: Add if changed
+          NAMESPACE_FILES_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/00-namespace" && echo "true" || echo "false")
+          if [ "$NAMESPACE_FILES_CHANGED" = "true" ]; then
+            echo "✅ Namespace files changed, adding to sync list"
+            if [ -f "k8s/00-namespace.yaml" ]; then
+              CHANGED_FILES="${CHANGED_FILES} k8s/00-namespace.yaml"
+            fi
+          fi
+          
+          # Add ALL other k8s files that changed (catch-all for ArgoCD sync)
+          # This ensures any k8s file change triggers ArgoCD sync
+          ALL_K8S_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep "^k8s/" || echo "")
+          if [ -n "$ALL_K8S_CHANGED" ]; then
+            echo "✅ Detected k8s file changes, ensuring all are in sync list:"
+            while IFS= read -r k8s_file; do
+              # Skip if already in CHANGED_FILES
+              if [[ ! " $CHANGED_FILES " =~ " ${k8s_file} " ]]; then
+                if [ -f "$k8s_file" ]; then
+                  CHANGED_FILES="${CHANGED_FILES} ${k8s_file}"
+                  echo "   Added: ${k8s_file}"
+                fi
+              fi
+            done <<< "$ALL_K8S_CHANGED"
+          fi
+          
+          # ArgoCD otomatik sync yapıyor (syncPolicy.automated aktif)
+          # Manuel refresh'e gerek yok - ArgoCD Git değişikliklerini otomatik algılayıp sync yapacak
+          echo "ℹ️  ArgoCD otomatik sync aktif - Git değişiklikleri otomatik algılanacak ve sync edilecek"
+          
+          # Save changed files for next step
+          echo "changed_files=${CHANGED_FILES}" >> $GITHUB_OUTPUT
+          if [ -n "$CHANGED_FILES" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.29.0
+
+      - name: Configure in-cluster kubeconfig (self-hosted runner)
+        run: |
+          if [ -z "${KUBERNETES_SERVICE_HOST}" ] || [ -z "${KUBERNETES_SERVICE_PORT}" ]; then
+            echo "❌ Kube API env vars yok; bu job mutlaka küme içindeki self-hosted runner üzerinde çalışmalı."
+            exit 1
+          fi
+          mkdir -p ~/.kube
+          kubectl config set-cluster finans-asistan \
+            --server="https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}" \
+            --certificate-authority="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" \
+            --embed-certs=true
+          SA_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+          kubectl config set-credentials finans-asistan --token="${SA_TOKEN}"
+          kubectl config set-context finans-asistan --cluster=finans-asistan --user=finans-asistan --namespace=finans-asistan
+          kubectl config use-context finans-asistan
+          echo "✅ In-cluster kubeconfig hazır (ServiceAccount: $(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)/$(kubectl config view -o jsonpath='{.users[0].name}'))"
+      
+      - name: Ensure finans-asistan namespace exists and is ready
+        if: steps.login-ecr.outcome == 'success'
+        run: |
+          echo "Checking finans-asistan namespace status..."
+          
+          # Check if namespace exists
+          if ! kubectl get namespace finans-asistan >/dev/null 2>&1; then
+            echo "⚠️  Namespace 'finans-asistan' does not exist. Creating it..."
+            kubectl create namespace finans-asistan
+            echo "✅ Namespace 'finans-asistan' created"
+            exit 0
+          fi
+          
+          # Check namespace phase
+          NAMESPACE_PHASE=$(kubectl get namespace finans-asistan -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+          
+          if [ "$NAMESPACE_PHASE" = "Terminating" ]; then
+            echo "⚠️  Namespace 'finans-asistan' is in Terminating state. Force cleanup and immediate recreate..."
+            
+            # Delete all resources in the namespace first
+            echo "   Deleting all resources in namespace..."
+            kubectl delete all --all -n finans-asistan --grace-period=0 --force 2>/dev/null || true
+            kubectl delete pvc --all -n finans-asistan --grace-period=0 --force 2>/dev/null || true
+            kubectl delete secrets --all -n finans-asistan --grace-period=0 --force 2>/dev/null || true
+            kubectl delete configmaps --all -n finans-asistan --grace-period=0 --force 2>/dev/null || true
+            
+            # Remove finalizers to force termination
+            echo "   Removing finalizers..."
+            NAMESPACE_JSON=$(kubectl get namespace finans-asistan -o json 2>/dev/null || echo "")
+            if [ -n "$NAMESPACE_JSON" ] && command -v jq >/dev/null 2>&1; then
+              echo "$NAMESPACE_JSON" | jq '.spec.finalizers = [] | .metadata.finalizers = []' | \
+                kubectl replace --raw "/api/v1/namespaces/finans-asistan/finalize" -f - 2>/dev/null || \
+                kubectl patch namespace finans-asistan -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+            else
+              kubectl patch namespace finans-asistan -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+            fi
+            
+            # Delete namespace and wait for it to be fully deleted before recreating
+            echo "   Deleting namespace..."
+            kubectl delete namespace finans-asistan --grace-period=0 --force 2>/dev/null || true
+            
+            # Wait for namespace to be fully deleted (max 15 seconds)
+            # Kubernetes namespace deletion is asynchronous, so we must wait
+            MAX_WAIT=15
+            WAITED=0
+            while [ $WAITED -lt $MAX_WAIT ]; do
+              if ! kubectl get namespace finans-asistan >/dev/null 2>&1; then
+                break
+              fi
+              sleep 1
+              WAITED=$((WAITED + 1))
+            done
+            
+            # Create new namespace
+            if ! kubectl get namespace finans-asistan >/dev/null 2>&1; then
+              kubectl create namespace finans-asistan
+              echo "✅ Namespace 'finans-asistan' recreated"
+            else
+              echo "⚠️  Namespace still exists after deletion attempt, trying to create anyway..."
+              kubectl create namespace finans-asistan 2>/dev/null || echo "⚠️  Namespace creation failed (may already exist)"
+            fi
+            exit 0
+          elif [ "$NAMESPACE_PHASE" != "Active" ]; then
+            echo "⚠️  Namespace 'finans-asistan' is in unexpected state: $NAMESPACE_PHASE"
+            echo "   Attempting to continue anyway..."
+          else
+            echo "✅ Namespace 'finans-asistan' is Active and ready"
+          fi
+      
+      - name: Create/Update ECR registry secret (fresh token every run)
+        if: steps.login-ecr.outcome == 'success'
+        run: |
+          echo "Creating/updating ECR registry secret with fresh token..."
+          
+          # Try to read ECR token from docker config (set by amazon-ecr-login)
+          ECR_AUTH=$(jq -r --arg reg "${ECR_REGISTRY}" '.auths[$reg].auth // empty' ~/.docker/config.json 2>/dev/null || echo "")
+          if [ -n "$ECR_AUTH" ]; then
+            DECODED=$(echo "$ECR_AUTH" | base64 -d 2>/dev/null || echo "")
+            ECR_USER=$(echo "$DECODED" | cut -d: -f1)
+            ECR_PASSWORD=$(echo "$DECODED" | cut -d: -f2-)
+          fi
+          
+          if [ -z "$ECR_PASSWORD" ] && command -v aws >/dev/null 2>&1; then
+            echo "Falling back to aws cli for ECR password"
+            ECR_PASSWORD=$(aws ecr get-login-password --region ${AWS_REGION} 2>/dev/null || echo "")
+            ECR_USER="AWS"
+          fi
+          
+          if [ -z "$ECR_PASSWORD" ]; then
+            echo "⚠️  Could not get ECR password, skipping ECR secret creation"
+            exit 0
+          fi
+          ECR_USER=${ECR_USER:-AWS}
+          
+          echo "✅ ECR token obtained (fresh token, valid for 12 hours)"
+          
+          # Create secret directly in cluster (no file, no Git)
+          kubectl create secret docker-registry ecr-registry-secret \
+            --namespace=finans-asistan \
+            --docker-server="${ECR_REGISTRY}" \
+            --docker-username="${ECR_USER}" \
+            --docker-password="${ECR_PASSWORD}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          echo "✅ ECR registry secret created/updated in cluster"
+          echo "   (Secret is NOT written to disk or committed to Git)"
+      
+      - name: Create ArgoCD Repository Secret
+        # CRITICAL: This step is independent of ECR login - ArgoCD needs ACCESS_TOKEN_GITHUB to access GitHub repo
+        # Even if ECR login fails, ArgoCD secret must be created/updated for Git sync to work
+        run: |
+          echo "Creating ArgoCD repository secret for GitHub access..."
+          
+          # Determine ArgoCD namespace (check where ArgoCD is installed)
+          ARGOCD_NAMESPACE="argocd"
+          if ! kubectl get deployment argocd-server -n "$ARGOCD_NAMESPACE" >/dev/null 2>&1; then
+            # Fallback: try finans-asistan namespace (for backward compatibility)
+            if kubectl get deployment argocd-server -n finans-asistan >/dev/null 2>&1; then
+              ARGOCD_NAMESPACE="finans-asistan"
+              echo "⚠️  Using legacy namespace 'finans-asistan' for ArgoCD"
+            fi
+          fi
+          
+          echo "   Using ArgoCD namespace: $ARGOCD_NAMESPACE"
+          
+          # Get ACCESS_TOKEN_GITHUB from GitHub Secrets (required for private repos)
+          # This token is used by ArgoCD to authenticate with GitHub repository
+          ACCESS_TOKEN_GITHUB="${{ secrets.ACCESS_TOKEN_GITHUB }}"
+          ACCESS_TOKEN_GITHUB=$(echo -n "$ACCESS_TOKEN_GITHUB" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          
+          # Create ArgoCD repository secret
+          # ArgoCD Git repository secret format (ArgoCD requirement):
+          #   - type: git (required)
+          #   - url: repository URL (required)
+          #   - password: ACCESS_TOKEN_GITHUB from GitHub Secrets (required for private repos)
+          #   Note: ArgoCD uses 'password' field name, but we store ACCESS_TOKEN_GITHUB in it
+          #   Username field is NOT needed - ArgoCD works with ACCESS_TOKEN_GITHUB only
+          if [ -n "$ACCESS_TOKEN_GITHUB" ]; then
+            echo "Using ACCESS_TOKEN_GITHUB from GitHub Secrets for private repository access"
+            echo "   ArgoCD secret 'password' field will contain ACCESS_TOKEN_GITHUB"
+            echo "   Username field is not required - ArgoCD works with ACCESS_TOKEN_GITHUB only"
+            
+            # CRITICAL: Always update password field (which stores ACCESS_TOKEN_GITHUB), even if secret exists
+            # This ensures ACCESS_TOKEN_GITHUB changes in GitHub Secrets are reflected in cluster
+            ACCESS_TOKEN_GITHUB_B64=$(echo -n "$ACCESS_TOKEN_GITHUB" | base64 | tr -d '\n')
+            
+            # Delete existing secret to ensure clean state
+            kubectl delete secret argocd-repo-github -n "$ARGOCD_NAMESPACE" --ignore-not-found=true 2>/dev/null || true
+            
+            # Create secret with password field containing ACCESS_TOKEN_GITHUB from GitHub Secrets
+            # Note: ArgoCD requires 'password' field name, but we store ACCESS_TOKEN_GITHUB in it
+            # CRITICAL: Create secret directly, then add annotation using kubectl annotate (avoids YAML syntax issues)
+            kubectl create secret generic argocd-repo-github \
+              --namespace="$ARGOCD_NAMESPACE" \
+              --from-literal=type=git \
+              --from-literal=url=https://github.com/JstLearn/FinansAsistan.git \
+              --from-literal=password="${ACCESS_TOKEN_GITHUB}" || {
+              echo "❌ ERROR: Failed to create secret"
+              exit 1
+            }
+            
+            # Add annotation using kubectl annotate (simpler and avoids YAML syntax issues)
+            kubectl annotate secret argocd-repo-github -n "$ARGOCD_NAMESPACE" \
+              argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
+              --overwrite || {
+              echo "⚠️  WARNING: Failed to add annotation, but secret was created"
+            }
+            
+            # CRITICAL: Always patch password field (which stores ACCESS_TOKEN_GITHUB) to ensure it's updated
+            # This handles the case where ACCESS_TOKEN_GITHUB changed in GitHub Secrets
+            echo "Ensuring password field (ACCESS_TOKEN_GITHUB) is up to date from GitHub Secrets..."
+            kubectl patch secret argocd-repo-github -n "$ARGOCD_NAMESPACE" \
+              --type='json' \
+              -p="[{\"op\": \"replace\", \"path\": \"/data/password\", \"value\": \"$ACCESS_TOKEN_GITHUB_B64\"}]" 2>/dev/null || \
+            kubectl patch secret argocd-repo-github -n "$ARGOCD_NAMESPACE" \
+              --type='json' \
+              -p="[{\"op\": \"add\", \"path\": \"/data/password\", \"value\": \"$ACCESS_TOKEN_GITHUB_B64\"}]" 2>/dev/null || true
+          else
+            echo "Creating repository secret without credentials (public repo)"
+            # CRITICAL: Create secret directly, then add annotation using kubectl annotate (avoids YAML syntax issues)
+            kubectl create secret generic argocd-repo-github \
+              --namespace="$ARGOCD_NAMESPACE" \
+              --from-literal=type=git \
+              --from-literal=url=https://github.com/JstLearn/FinansAsistan.git || {
+              echo "❌ ERROR: Failed to create secret"
+              exit 1
+            }
+            
+            # Add annotation using kubectl annotate (simpler and avoids YAML syntax issues)
+            kubectl annotate secret argocd-repo-github -n "$ARGOCD_NAMESPACE" \
+              argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
+              --overwrite || {
+              echo "⚠️  WARNING: Failed to add annotation, but secret was created"
+            }
+          fi
+          
+          # Label the secret so ArgoCD recognizes it
+          kubectl label secret argocd-repo-github -n "$ARGOCD_NAMESPACE" argocd.argoproj.io/secret-type=repository --overwrite
+          
+          # Ensure annotation is present (in case it was removed)
+          kubectl annotate secret argocd-repo-github -n "$ARGOCD_NAMESPACE" \
+            argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
+            --overwrite
+          
+          # Verify secret has password field containing ACCESS_TOKEN_GITHUB from GitHub Secrets
+          if [ -n "$ACCESS_TOKEN_GITHUB" ]; then
+            echo "Verifying secret has password field (containing ACCESS_TOKEN_GITHUB from GitHub Secrets)..."
+            SECRET_HAS_ACCESS_TOKEN_GITHUB=$(kubectl get secret argocd-repo-github -n "$ARGOCD_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null || echo "")
+            
+            if [ -n "$SECRET_HAS_ACCESS_TOKEN_GITHUB" ]; then
+              echo "   ✅ Secret has password field with ACCESS_TOKEN_GITHUB from GitHub Secrets (verified)"
+            else
+              echo "   ❌ ERROR: Secret password field (ACCESS_TOKEN_GITHUB) is missing!"
+              echo "   Make sure ACCESS_TOKEN_GITHUB is set in GitHub Secrets"
+              exit 1
+            fi
+          else
+            echo "⚠️  WARNING: ACCESS_TOKEN_GITHUB not found in GitHub Secrets"
+            echo "   ArgoCD will try to access repository as public (may fail for private repos)"
+          fi
+          
+          # Add finalizer to prevent accidental deletion
+          # This ensures the secret persists even if something tries to delete it
+          kubectl patch secret argocd-repo-github -n "$ARGOCD_NAMESPACE" \
+            --type='json' \
+            -p='[{"op": "add", "path": "/metadata/finalizers/-", "value": "argocd.argoproj.io/finalizer"}]' 2>/dev/null || true
+          
+          echo "✅ ArgoCD repository secret created/updated (protected from deletion)"
+          
+          # Force ArgoCD to reload repository secrets by restarting repo-server
+          echo "Restarting ArgoCD repo-server to reload secrets..."
+          kubectl rollout restart deployment/argocd-repo-server -n "$ARGOCD_NAMESPACE" 2>/dev/null || true
+          sleep 5
+      
+      - name: Create Kubernetes secrets from GitHub Secrets
+        if: steps.login-ecr.outcome == 'success'
+        run: |
+          # Get all secrets from GitHub Secrets
+          BACKUP_INTERVAL="${BACKUP_INTERVAL:-300}"
+          S3_BUCKET_SECRET="${{ secrets.S3_BUCKET }}"
+          AWS_ACCOUNT_ID="${{ secrets.AWS_ACCOUNT_ID }}"
+          AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+          AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          JWT_SECRET="${{ secrets.JWT_SECRET }}"
+          AWS_REGION="${{ secrets.AWS_REGION }}"
+          EMAIL_PASS="${{ secrets.EMAIL_PASS }}"
+          EMAIL_USER="${{ secrets.EMAIL_USER }}"
+          ACCESS_TOKEN_GITHUB="${{ secrets.ACCESS_TOKEN_GITHUB }}"
+          POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
+          POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
+          POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
+          CORS_ORIGINS="${{ secrets.CORS_ORIGINS }}"
+          SMTP_HOST="${{ secrets.SMTP_HOST }}"
+          SMTP_PORT="${{ secrets.SMTP_PORT }}"
+          SMTP_SSL="${{ secrets.SMTP_SSL }}"
+          IMAP_HOST="${{ secrets.IMAP_HOST }}"
+          IMAP_PORT="${{ secrets.IMAP_PORT }}"
+          IMAP_SSL="${{ secrets.IMAP_SSL }}"
+          
+          # Clean credentials: remove newlines and trim whitespace
+          AWS_ACCESS_KEY_ID=$(echo -n "$AWS_ACCESS_KEY_ID" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          AWS_SECRET_ACCESS_KEY=$(echo -n "$AWS_SECRET_ACCESS_KEY" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          JWT_SECRET=$(echo -n "$JWT_SECRET" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          EMAIL_PASS=$(echo -n "$EMAIL_PASS" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          ACCESS_TOKEN_GITHUB=$(echo -n "$ACCESS_TOKEN_GITHUB" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          POSTGRES_PASSWORD=$(echo -n "$POSTGRES_PASSWORD" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          POSTGRES_USER=$(echo -n "$POSTGRES_USER" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          POSTGRES_DB=$(echo -n "$POSTGRES_DB" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          CORS_ORIGINS=$(echo -n "$CORS_ORIGINS" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          CORS_ORIGIN=$(echo -n "$CORS_ORIGIN" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          SMTP_HOST=$(echo -n "$SMTP_HOST" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          SMTP_PORT=$(echo -n "$SMTP_PORT" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          SMTP_SSL=$(echo -n "$SMTP_SSL" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          IMAP_HOST=$(echo -n "$IMAP_HOST" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          IMAP_PORT=$(echo -n "$IMAP_PORT" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          IMAP_SSL=$(echo -n "$IMAP_SSL" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          # Varsayılan CORS allowlist (sadece prod domainler)
+          DEFAULT_CORS_ORIGINS="https://finansasistan.com,https://www.finansasistan.com"
+          # Eğer CORS_ORIGINS boş ise DEFAULT'u kullan
+          if [ -z "$CORS_ORIGINS" ]; then
+            CORS_ORIGINS="$DEFAULT_CORS_ORIGINS"
+          fi
+          
+          # Create Kubernetes secrets directly in cluster (no files, no Git)
+          kubectl create secret generic app-secrets \
+            --namespace=finans-asistan \
+            --from-literal=BACKUP_INTERVAL="${BACKUP_INTERVAL}" \
+            --from-literal=S3_BUCKET="${S3_BUCKET_SECRET}" \
+            --from-literal=AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID}" \
+            --from-literal=AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \
+            --from-literal=JWT_SECRET="${JWT_SECRET}" \
+            --from-literal=AWS_REGION="${AWS_REGION}" \
+            --from-literal=AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \
+            --from-literal=EMAIL_PASS="${EMAIL_PASS}" \
+            --from-literal=EMAIL_USER="${EMAIL_USER}" \
+            --from-literal=email-pass="${EMAIL_PASS}" \
+            --from-literal=email-user="${EMAIL_USER}" \
+            --from-literal=ACCESS_TOKEN_GITHUB="${ACCESS_TOKEN_GITHUB}" \
+            --from-literal=POSTGRES_DB="${POSTGRES_DB}" \
+            --from-literal=POSTGRES_USER="${POSTGRES_USER}" \
+            --from-literal=POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+            --from-literal=redis-url="redis://redis:6379" \
+            --from-literal=kafka-brokers="kafka-cluster-kafka-bootstrap:9092" \
+            --from-literal=jwt-secret="${JWT_SECRET}" \
+            --from-literal=CORS_ORIGINS="${CORS_ORIGINS}" \
+            ${CORS_ORIGIN:+--from-literal=CORS_ORIGIN="${CORS_ORIGIN}"} \
+            --from-literal=SMTP_HOST="${SMTP_HOST}" \
+            --from-literal=SMTP_PORT="${SMTP_PORT}" \
+            --from-literal=SMTP_SSL="${SMTP_SSL}" \
+            ${IMAP_HOST:+--from-literal=IMAP_HOST="${IMAP_HOST}"} \
+            ${IMAP_PORT:+--from-literal=IMAP_PORT="${IMAP_PORT}"} \
+            ${IMAP_SSL:+--from-literal=IMAP_SSL="${IMAP_SSL}"} \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          echo "✅ Kubernetes secret 'app-secrets' created/updated in cluster"
+          echo "   (Secret is NOT written to disk or committed to Git)"
+          
+          # Check if QUICK_START/.env changed to trigger pod restart
+          CHANGED_FILES_FOR_SECRETS=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+          if echo "$CHANGED_FILES_FOR_SECRETS" | grep -qE "^QUICK_START/\.env"; then
+            echo "✅ QUICK_START/.env changed - will trigger pod restart for backend and event-processor"
+            echo "   (Pod restart will be triggered by deployment annotation updates in next step)"
+          fi
+
+      - name: Ensure cloudflare-tunnel namespace exists
+        if: steps.login-ecr.outcome == 'success' && env.CLOUDFLARE_TUNNEL_TOKEN != ''
+        run: |
+          echo "Checking cloudflare-tunnel namespace..."
+          if ! kubectl get namespace cloudflare-tunnel >/dev/null 2>&1; then
+            echo "⚠️  Namespace 'cloudflare-tunnel' does not exist. Creating it..."
+            kubectl create namespace cloudflare-tunnel
+            echo "✅ Namespace 'cloudflare-tunnel' created"
+          else
+            NAMESPACE_PHASE=$(kubectl get namespace cloudflare-tunnel -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            if [ "$NAMESPACE_PHASE" = "Terminating" ]; then
+              echo "⚠️  Namespace 'cloudflare-tunnel' is in Terminating state. Force cleanup and immediate recreate..."
+              
+              # Delete all resources in the namespace first
+              echo "   Deleting all resources in namespace..."
+              kubectl delete all --all -n cloudflare-tunnel --grace-period=0 --force 2>/dev/null || true
+              kubectl delete secrets --all -n cloudflare-tunnel --grace-period=0 --force 2>/dev/null || true
+              
+              # Remove finalizers to force termination
+              echo "   Removing finalizers..."
+              NAMESPACE_JSON=$(kubectl get namespace cloudflare-tunnel -o json 2>/dev/null || echo "")
+              if [ -n "$NAMESPACE_JSON" ] && command -v jq >/dev/null 2>&1; then
+                echo "$NAMESPACE_JSON" | jq '.spec.finalizers = [] | .metadata.finalizers = []' | \
+                  kubectl replace --raw "/api/v1/namespaces/cloudflare-tunnel/finalize" -f - 2>/dev/null || \
+                  kubectl patch namespace cloudflare-tunnel -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+              else
+                kubectl patch namespace cloudflare-tunnel -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+              fi
+              
+              # Delete namespace and wait for it to be fully deleted before recreating
+              echo "   Deleting namespace..."
+              kubectl delete namespace cloudflare-tunnel --grace-period=0 --force 2>/dev/null || true
+              
+              # Wait for namespace to be fully deleted (max 15 seconds)
+              # Kubernetes namespace deletion is asynchronous, so we must wait
+              MAX_WAIT=15
+              WAITED=0
+              while [ $WAITED -lt $MAX_WAIT ]; do
+                if ! kubectl get namespace cloudflare-tunnel >/dev/null 2>&1; then
+                  break
+                fi
+                sleep 1
+                WAITED=$((WAITED + 1))
+              done
+              
+              # Create new namespace
+              if ! kubectl get namespace cloudflare-tunnel >/dev/null 2>&1; then
+                kubectl create namespace cloudflare-tunnel
+                echo "✅ Namespace 'cloudflare-tunnel' recreated"
+              else
+                echo "⚠️  Namespace still exists after deletion attempt, trying to create anyway..."
+                kubectl create namespace cloudflare-tunnel 2>/dev/null || echo "⚠️  Namespace creation failed (may already exist)"
+              fi
+            elif [ "$NAMESPACE_PHASE" != "Active" ]; then
+              echo "⚠️  Namespace 'cloudflare-tunnel' is in unexpected state: $NAMESPACE_PHASE"
+              echo "   Attempting to continue anyway..."
+            else
+              echo "✅ Namespace 'cloudflare-tunnel' exists and is ready"
+            fi
+          fi
+      
+      - name: Create/Update Cloudflare Tunnel token secret
+        if: steps.login-ecr.outcome == 'success' && env.CLOUDFLARE_TUNNEL_TOKEN != ''
+        run: |
+          kubectl create secret generic cloudflare-tunnel-token \
+            --namespace=cloudflare-tunnel \
+            --from-literal=token="${CLOUDFLARE_TUNNEL_TOKEN}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          echo "✅ Kubernetes secret 'cloudflare-tunnel-token' created/updated in cluster"
+          echo "   (Secret is NOT written to disk or committed to Git)"
+      
+      - name: Ensure traefik-system namespace exists
+        if: steps.login-ecr.outcome == 'success' && env.CLOUDFLARE_API != ''
+        run: |
+          echo "Checking traefik-system namespace..."
+          if ! kubectl get namespace traefik-system >/dev/null 2>&1; then
+            echo "⚠️  Namespace 'traefik-system' does not exist. Creating it..."
+            kubectl create namespace traefik-system
+            echo "✅ Namespace 'traefik-system' created"
+          else
+            NAMESPACE_PHASE=$(kubectl get namespace traefik-system -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            if [ "$NAMESPACE_PHASE" = "Terminating" ]; then
+              echo "⚠️  Namespace 'traefik-system' is in Terminating state. Force cleanup and immediate recreate..."
+              
+              # Delete all resources in the namespace first
+              echo "   Deleting all resources in namespace..."
+              kubectl delete all --all -n traefik-system --grace-period=0 --force 2>/dev/null || true
+              kubectl delete secrets --all -n traefik-system --grace-period=0 --force 2>/dev/null || true
+              
+              # Remove finalizers to force termination
+              echo "   Removing finalizers..."
+              NAMESPACE_JSON=$(kubectl get namespace traefik-system -o json 2>/dev/null || echo "")
+              if [ -n "$NAMESPACE_JSON" ] && command -v jq >/dev/null 2>&1; then
+                echo "$NAMESPACE_JSON" | jq '.spec.finalizers = [] | .metadata.finalizers = []' | \
+                  kubectl replace --raw "/api/v1/namespaces/traefik-system/finalize" -f - 2>/dev/null || \
+                  kubectl patch namespace traefik-system -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+              else
+                kubectl patch namespace traefik-system -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+              fi
+              
+              # Delete namespace and wait for it to be fully deleted before recreating
+              echo "   Deleting namespace..."
+              kubectl delete namespace traefik-system --grace-period=0 --force 2>/dev/null || true
+              
+              # Wait for namespace to be fully deleted (max 15 seconds)
+              # Kubernetes namespace deletion is asynchronous, so we must wait
+              MAX_WAIT=15
+              WAITED=0
+              while [ $WAITED -lt $MAX_WAIT ]; do
+                if ! kubectl get namespace traefik-system >/dev/null 2>&1; then
+                  break
+                fi
+                sleep 1
+                WAITED=$((WAITED + 1))
+              done
+              
+              # Create new namespace
+              if ! kubectl get namespace traefik-system >/dev/null 2>&1; then
+                kubectl create namespace traefik-system
+                echo "✅ Namespace 'traefik-system' recreated"
+              else
+                echo "⚠️  Namespace still exists after deletion attempt, trying to create anyway..."
+                kubectl create namespace traefik-system 2>/dev/null || echo "⚠️  Namespace creation failed (may already exist)"
+              fi
+            elif [ "$NAMESPACE_PHASE" != "Active" ]; then
+              echo "⚠️  Namespace 'traefik-system' is in unexpected state: $NAMESPACE_PHASE"
+              echo "   Attempting to continue anyway..."
+            else
+              echo "✅ Namespace 'traefik-system' exists and is ready"
+            fi
+          fi
+      
+      - name: Create/Update Cloudflare DNS API token secret
+        if: steps.login-ecr.outcome == 'success' && env.CLOUDFLARE_API != ''
+        run: |
+          # Clean token (strip newlines/whitespace)
+          CF_API_TOKEN=$(echo -n "${CLOUDFLARE_API}" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          kubectl create secret generic cloudflare-api-token \
+            --namespace=traefik-system \
+            --from-literal=CF_API_TOKEN="${CF_API_TOKEN}" \
+            --from-literal=CF_DNS_API_TOKEN="${CF_API_TOKEN}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          echo "✅ Kubernetes secret 'cloudflare-api-token' created/updated in traefik-system"
+          echo "   (Secret is NOT written to disk or committed to Git)"
+
+      - name: Create External-DNS AWS credentials secret
+        if: steps.login-ecr.outcome == 'success'
+        run: |
+          echo "Creating External-DNS AWS credentials secret directly in cluster (not in Git)..."
+          
+          # Get AWS credentials from GitHub Secrets
+          AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+          AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          
+          # Clean credentials: remove newlines and trim whitespace
+          AWS_ACCESS_KEY_ID=$(echo -n "$AWS_ACCESS_KEY_ID" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          AWS_SECRET_ACCESS_KEY=$(echo -n "$AWS_SECRET_ACCESS_KEY" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          
+          # Create External-DNS secret directly in cluster (no files, no Git)
+          kubectl create secret generic external-dns-aws-credentials \
+            --namespace=kube-system \
+            --from-literal=AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \
+            --from-literal=AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          echo "✅ External-DNS AWS credentials secret created/updated in cluster"
+          echo "   (Secret is NOT written to disk or committed to Git)"
+      
+      - name: Commit and push updated k8s manifests to GitHub
+        if: steps.login-ecr.outcome == 'success'
+        env:
+          BACKEND_CHANGED: ${{ steps.detect-all-changes.outputs.backend_changed }}
+          FRONTEND_CHANGED: ${{ steps.detect-all-changes.outputs.frontend_changed }}
+          EVENT_PROCESSOR_CHANGED: ${{ steps.detect-all-changes.outputs.event_processor_changed }}
+          POSTGRES_CHANGED: ${{ steps.detect-all-changes.outputs.postgres_changed }}
+          REDIS_CHANGED: ${{ steps.detect-all-changes.outputs.redis_changed }}
+          KAFKA_CHANGED: ${{ steps.detect-all-changes.outputs.kafka_changed }}
+          MONITORING_CHANGED: ${{ steps.detect-all-changes.outputs.monitoring_changed }}
+          ARGOCD_CHANGED: ${{ steps.detect-all-changes.outputs.argocd_changed }}
+          K8S_FILES_CHANGED: ${{ steps.detect-all-changes.outputs.k8s_files_changed }}
+          FRONTEND_DIGEST_OUTPUT: ${{ steps.frontend-digest.outputs.frontend_digest }}
+          BACKEND_DIGEST_OUTPUT: ${{ steps.backend-digest.outputs.backend_digest }}
+          EVENT_PROCESSOR_DIGEST_OUTPUT: ${{ steps.event-processor-digest.outputs.event_processor_digest }}
+          BUILD_FRONTEND_OUTCOME: ${{ steps.build-frontend.outcome }}
+          BUILD_BACKEND_OUTCOME: ${{ steps.build-backend.outcome }}
+          BUILD_EVENT_PROCESSOR_OUTCOME: ${{ steps.build-event-processor.outcome }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          # Configure git
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Set up remote URL with token for authentication
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git
+          
+          # Fetch latest changes from remote to avoid push conflicts
+          echo "🔄 Fetching latest changes from remote..."
+          git fetch origin ${GITHUB_REF_NAME} || echo "⚠️  Fetch failed, continuing anyway..."
+          
+          # Try to merge remote changes if any exist
+          if git merge-base --is-ancestor HEAD origin/${GITHUB_REF_NAME} 2>/dev/null; then
+            echo "✅ Local branch is up to date with remote"
+          else
+            echo "⚠️  Remote has new commits, attempting to merge..."
+            git merge origin/${GITHUB_REF_NAME} --no-edit || {
+              echo "⚠️  Merge conflict detected, but continuing with commit..."
+              echo "   Conflicts will be resolved by keeping local changes (k8s manifests)"
+            }
+          fi
+          
+          # Get commit SHA
+          COMMIT_SHA="${GITHUB_SHA}"
+          
+          # Only add deployment files for services that actually changed OR were built successfully
+          # Backend/Frontend/Event-processor build başarılı olduğunda deployment dosyası güncellenir, bu yüzden commit'e eklenmelidir
+          DEPLOYMENT_FILES=""
+          # Backend: Add if changed OR if build was successful (new image was pushed)
+          if [ "$BACKEND_CHANGED" = "true" ] || [ -n "$BACKEND_DIGEST_OUTPUT" ] || [ "$BUILD_BACKEND_OUTCOME" = "success" ] || [ "$BUILD_BACKEND_OUTCOME" = "skipped" ]; then
+            DEPLOYMENT_FILES="${DEPLOYMENT_FILES} k8s/04-backend-deployment.yaml"
+            echo "✅ Backend deployment file will be committed (build successful or code changed)"
+          fi
+          # Frontend: Add if changed OR if build was successful (new image was pushed)
+          # CRITICAL: Always add frontend deployment if build succeeded, even if FRONTEND_CHANGED is false
+          # This ensures deployment file is committed and ArgoCD will sync
+          if [ "$FRONTEND_CHANGED" = "true" ] || [ -n "$FRONTEND_DIGEST_OUTPUT" ] || [ "$BUILD_FRONTEND_OUTCOME" = "success" ] || [ "$BUILD_FRONTEND_OUTCOME" = "skipped" ]; then
+            DEPLOYMENT_FILES="${DEPLOYMENT_FILES} k8s/05-frontend-deployment.yaml"
+            echo "✅ Frontend deployment file will be committed (build successful or code changed)"
+          fi
+          # Event-processor: Add if changed OR if build was successful (new image was pushed)
+          if [ "$EVENT_PROCESSOR_CHANGED" = "true" ] || [ -n "$EVENT_PROCESSOR_DIGEST_OUTPUT" ] || [ "$BUILD_EVENT_PROCESSOR_OUTCOME" = "success" ] || [ "$BUILD_EVENT_PROCESSOR_OUTCOME" = "skipped" ]; then
+            DEPLOYMENT_FILES="${DEPLOYMENT_FILES} k8s/11-event-processor.yaml"
+            echo "✅ Event-processor deployment file will be committed (build successful or code changed)"
+          fi
+          
+          # Secrets files are created for ArgoCD sync and committed to Git
+          # Secrets sadece 3 yerde bulunur (original source):
+          # 1. Lokalde QUICK_START/.env
+          # 2. AWS S3'te QUICK_START/.env
+          # 3. GitHub Secrets
+          # Secret files (01-secrets.yaml, 01a-ecr-registry-secret.yaml, 15a-external-dns-secret.yaml)
+          # are created from GitHub Secrets and committed to Git for ArgoCD sync
+          # Always add secrets files if they exist (created in previous steps)
+          if [ -f "k8s/01a-ecr-registry-secret.yaml" ]; then
+            DEPLOYMENT_FILES="${DEPLOYMENT_FILES} k8s/01a-ecr-registry-secret.yaml"
+            echo "✅ ECR registry secret file will be committed (for ArgoCD sync)"
+          fi
+          if [ -f "k8s/01-secrets.yaml" ]; then
+            DEPLOYMENT_FILES="${DEPLOYMENT_FILES} k8s/01-secrets.yaml"
+            echo "✅ App secrets file will be committed (for ArgoCD sync)"
+          fi
+          if [ -f "k8s/15a-external-dns-secret.yaml" ]; then
+            DEPLOYMENT_FILES="${DEPLOYMENT_FILES} k8s/15a-external-dns-secret.yaml"
+            echo "✅ External-DNS secret file will be committed (for ArgoCD sync)"
+          fi
+          
+          # PostgreSQL: Add if changed OR if files were updated
+          if [ "$POSTGRES_CHANGED" = "true" ] || git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/01-postgres"; then
+            DEPLOYMENT_FILES="${DEPLOYMENT_FILES} k8s/01-postgres-statefulset.yaml"
+            echo "✅ PostgreSQL StatefulSet file will be committed"
+          fi
+          # Redis: Add if changed OR if files were updated
+          if [ "$REDIS_CHANGED" = "true" ] || git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/10-redis"; then
+            DEPLOYMENT_FILES="${DEPLOYMENT_FILES} k8s/10-redis.yaml"
+            echo "✅ Redis deployment file will be committed"
+          fi
+          # Kafka: Add if changed OR if files were updated
+          if [ "$KAFKA_CHANGED" = "true" ] || git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/02-kafka|^k8s/03-kafka"; then
+            DEPLOYMENT_FILES="${DEPLOYMENT_FILES} k8s/02-kafka-cluster.yaml k8s/02a-kafka-nodepools.yaml k8s/03-kafka-topics.yaml"
+            echo "✅ Kafka config files will be committed"
+          fi
+          # Monitoring: Add if changed OR if files were updated
+          if [ "$MONITORING_CHANGED" = "true" ] || git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^k8s/09-monitoring"; then
+            DEPLOYMENT_FILES="${DEPLOYMENT_FILES} k8s/09-monitoring.yaml"
+            echo "✅ Monitoring deployment file will be committed"
+          fi
+          
+          # ArgoCD application dosyası sadece gerçekten değiştiğinde commit edilmeli
+          # Otomatik sync zaten aktif, manuel refresh'e gerek yok
+          # ArgoCD is excluded from automatic updates per user request
+          
+          # Add all changed files from the update step (deployments, configs, etc.)
+          if [ -n "${{ steps.update-images.outputs.changed_files }}" ]; then
+            ADDITIONAL_FILES="${{ steps.update-images.outputs.changed_files }}"
+            for file in $ADDITIONAL_FILES; do
+              DEPLOYMENT_FILES="${DEPLOYMENT_FILES} ${file}"
+            done
+          fi
+          
+          echo "Files to commit: ${DEPLOYMENT_FILES}"
+          for file in $DEPLOYMENT_FILES; do
+            if [ -f "$file" ]; then
+              git add "$file"
+              echo "✅ Added $file to commit"
+            else
+              echo "⚠️  File not found: $file"
+            fi
+          done
+          
+          # Commit deployment files only if there are changes
+          # Check if there are staged changes
+          if git diff --cached --quiet; then
+            if [ -n "$DEPLOYMENT_FILES" ]; then
+              echo "⚠️  No staged changes, but deployment files should be updated..."
+              # Force add deployment files for changed services
+              for file in $DEPLOYMENT_FILES; do
+                if [ -f "$file" ]; then
+                  git add -f "$file"
+                fi
+              done
+            else
+              echo "ℹ️  No deployment files to commit (no services changed)"
+            fi
+          fi
+          
+          # Commit only if there are changes (deployment files for changed services)
+          if ! git diff --cached --quiet; then
+            # Build descriptive commit message
+            COMMIT_MSG="chore: trigger pod restart to pull latest images [${COMMIT_SHA:0:7}]"
+            
+            # Add service names to commit message (changed services OR built successfully)
+            UPDATED_SERVICES=""
+            # Backend: Include if changed OR if deployment file was updated (build successful)
+            if [ "$BACKEND_CHANGED" = "true" ] || echo "$DEPLOYMENT_FILES" | grep -q "k8s/04-backend-deployment.yaml" || [ "$BUILD_BACKEND_OUTCOME" = "success" ]; then
+              UPDATED_SERVICES="${UPDATED_SERVICES} backend"
+            fi
+            # Frontend: Include if changed OR if deployment file was updated (build successful)
+            # CRITICAL: Always include frontend if build succeeded, ensuring deployment is updated
+            if [ "$FRONTEND_CHANGED" = "true" ] || echo "$DEPLOYMENT_FILES" | grep -q "k8s/05-frontend-deployment.yaml" || [ "$BUILD_FRONTEND_OUTCOME" = "success" ]; then
+              UPDATED_SERVICES="${UPDATED_SERVICES} frontend"
+            fi
+            # Event-processor: Include if changed OR if deployment file was updated (build successful)
+            if [ "$EVENT_PROCESSOR_CHANGED" = "true" ] || echo "$DEPLOYMENT_FILES" | grep -q "k8s/11-event-processor.yaml" || [ "$BUILD_EVENT_PROCESSOR_OUTCOME" = "success" ]; then
+              UPDATED_SERVICES="${UPDATED_SERVICES} event-processor"
+            fi
+            
+            # Add other services that changed
+            # PostgreSQL: Include if changed OR if deployment file was updated
+            if [ "$POSTGRES_CHANGED" = "true" ] || echo "$DEPLOYMENT_FILES" | grep -q "k8s/01-postgres-statefulset.yaml"; then
+              UPDATED_SERVICES="${UPDATED_SERVICES} postgres"
+            fi
+            # Redis: Include if changed OR if deployment file was updated
+            if [ "$REDIS_CHANGED" = "true" ] || echo "$DEPLOYMENT_FILES" | grep -q "k8s/10-redis.yaml"; then
+              UPDATED_SERVICES="${UPDATED_SERVICES} redis"
+            fi
+            # Kafka: Include if changed OR if deployment file was updated
+            if [ "$KAFKA_CHANGED" = "true" ] || echo "$DEPLOYMENT_FILES" | grep -q "k8s/02-kafka"; then
+              UPDATED_SERVICES="${UPDATED_SERVICES} kafka"
+            fi
+            # Monitoring: Include if changed OR if deployment file was updated
+            if [ "$MONITORING_CHANGED" = "true" ] || echo "$DEPLOYMENT_FILES" | grep -q "k8s/09-monitoring.yaml"; then
+              UPDATED_SERVICES="${UPDATED_SERVICES} monitoring"
+            fi
+            # ArgoCD: Skip (user requested to exclude ArgoCD from automatic updates)
+            # if [ "$ARGOCD_CHANGED" = "true" ]; then
+            #   UPDATED_SERVICES="${UPDATED_SERVICES} argocd"
+            # fi
+            if [ "$EVENT_PROCESSOR_CHANGED" = "true" ]; then
+              echo "   (event-processor code change detected)"
+            fi
+            # Add other k8s config changes (HPA, Ingress, RBAC, Namespace, etc.)
+            if [ "$K8S_FILES_CHANGED" = "true" ]; then
+              UPDATED_SERVICES="${UPDATED_SERVICES} k8s-config"
+            fi
+            
+            if [ -n "$UPDATED_SERVICES" ]; then
+              COMMIT_MSG="${COMMIT_MSG}\n\nUpdated services:${UPDATED_SERVICES}"
+            fi
+            
+            COMMIT_MSG="${COMMIT_MSG}\n\nArgoCD will automatically sync these changes to cluster."
+            
+            # 🔍 DEBUG: Show git diff before commit
+            echo ""
+            echo "🔍 DEBUG: Git diff (staged changes):"
+            echo "=========================================="
+            git diff --cached --stat || echo "  ⚠️  No staged changes to show"
+            echo ""
+            echo "🔍 DEBUG: Detailed diff for deployment files:"
+            for file in k8s/04-backend-deployment.yaml k8s/05-frontend-deployment.yaml k8s/11-event-processor.yaml k8s/13-argocd-application.yaml; do
+              if git diff --cached "$file" 2>/dev/null | grep -q .; then
+                echo ""
+                echo "📄 Changes in $file:"
+                git diff --cached "$file" | head -50 || true
+              fi
+            done
+            echo "=========================================="
+            echo ""
+            
+            # Commit with descriptive message
+            echo -e "$COMMIT_MSG" | git commit -F -
+            
+            # 🔍 DEBUG: Show commit details
+            echo ""
+            echo "🔍 DEBUG: Commit created:"
+            echo "=========================================="
+            git log -1 --stat --pretty=format:"Commit: %h%nAuthor: %an <%ae>%nDate: %ad%nMessage: %s%n" || true
+            echo "=========================================="
+            echo ""
+            
+            # Push to the same branch that triggered the workflow
+            # Fetch and merge any remote changes before pushing
+            echo "🔄 Fetching latest changes before push..."
+            git fetch origin ${GITHUB_REF_NAME} || echo "⚠️  Fetch failed, continuing with push..."
+            
+            # Check if remote is ahead
+            LOCAL=$(git rev-parse HEAD)
+            REMOTE=$(git rev-parse origin/${GITHUB_REF_NAME} 2>/dev/null || echo "")
+            
+            if [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ]; then
+              echo "⚠️  Remote has new commits. Merging remote changes..."
+              git merge origin/${GITHUB_REF_NAME} --no-edit -m "Merge remote changes before push" || {
+                echo "⚠️  Merge conflict detected. Resolving by keeping our k8s manifest changes..."
+                # If there are conflicts in k8s files, keep our version
+                for file in $DEPLOYMENT_FILES; do
+                  if [ -f "$file" ]; then
+                    git checkout --ours "$file" 2>/dev/null || true
+                    git add "$file"
+                  fi
+                done
+                # Complete the merge
+                git commit --no-edit || git commit -m "Merge remote changes, keeping k8s manifest updates" || true
+              }
+            fi
+            
+            # Now push
+            git push origin HEAD:${GITHUB_REF_NAME}
+            
+            # 🔍 DEBUG: Verify files are in the commit
+            echo ""
+            echo "🔍 DEBUG: Files in last commit:"
+            echo "=========================================="
+            git show --name-status --pretty=format: HEAD | head -20 || true
+            echo "=========================================="
+            echo ""
+            
+            # 🔍 DEBUG: Show deployment files content after commit
+            echo ""
+            echo "🔍 DEBUG: Deployment files after commit (from Git):"
+            echo "=========================================="
+            for file in k8s/04-backend-deployment.yaml k8s/05-frontend-deployment.yaml k8s/11-event-processor.yaml; do
+              if git show HEAD:"$file" >/dev/null 2>&1; then
+                echo ""
+                echo "📄 File: $file (from Git HEAD)"
+                echo "---"
+                echo "Image (should be 'latest'):"
+                git show HEAD:"$file" | grep "image:" | head -1 || echo "  ⚠️  No image found"
+                echo "Pod template annotations:"
+                git show HEAD:"$file" | grep -A 5 "annotations:" | grep -E "restartedAt|revision|timestamp|commit-sha" || echo "  ⚠️  No critical annotations found"
+              fi
+            done
+            echo "=========================================="
+            echo ""
+            
+            echo "✅ K8s manifests committed and pushed to GitHub"
+            echo "ArgoCD will automatically sync these changes"
+          else
+            echo "⚠️  No changes to commit (git diff --cached --quiet returned true)"
+            echo "🔍 DEBUG: Checking why no changes detected..."
+            echo "Staged files:"
+            git diff --cached --name-only || echo "  No staged files"
+            echo "Unstaged changes:"
+            git diff --name-only || echo "  No unstaged changes"
+            echo "Workdir status:"
+            git status --short || true
+          fi
+      
+      - name: Apply ArgoCD configuration files (if changed)
+        if: steps.login-ecr.outcome == 'success'
+        run: |
+          echo "🔧 Checking if ArgoCD configuration files need to be applied..."
+          
+          # Only apply if ArgoCD config files changed in this commit
+          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "(13-argocd-application|14-argocd-config)\.yaml"; then
+            echo "📝 ArgoCD configuration files changed, applying to cluster..."
+            
+            # Determine ArgoCD namespace (check where ArgoCD is installed)
+            ARGOCD_NAMESPACE="argocd"
+            if ! kubectl get deployment argocd-server -n "$ARGOCD_NAMESPACE" >/dev/null 2>&1; then
+              # Fallback: try finans-asistan namespace (for backward compatibility)
+              if kubectl get deployment argocd-server -n finans-asistan >/dev/null 2>&1; then
+                ARGOCD_NAMESPACE="finans-asistan"
+                echo "⚠️  Using legacy namespace 'finans-asistan' for ArgoCD"
+              fi
+            fi
+            
+            echo "   Using ArgoCD namespace: $ARGOCD_NAMESPACE"
+            
+            # Apply ArgoCD ConfigMap (PVC health check customization)
+            if [ -f "k8s/14-argocd-config.yaml" ]; then
+              echo "   Applying ArgoCD ConfigMap..."
+              kubectl apply -f k8s/14-argocd-config.yaml -n "$ARGOCD_NAMESPACE" || {
+                echo "⚠️  Failed to apply ArgoCD ConfigMap, continuing..."
+              }
+              
+              # Restart ArgoCD pods to pick up ConfigMap changes (only if ConfigMap changed)
+              echo "   Restarting ArgoCD pods to apply ConfigMap changes..."
+              kubectl rollout restart statefulset argocd-application-controller -n "$ARGOCD_NAMESPACE" 2>/dev/null || true
+              kubectl rollout restart deployment argocd-repo-server -n "$ARGOCD_NAMESPACE" 2>/dev/null || true
+              echo "   ✅ ArgoCD pods restart initiated"
+            fi
+            
+            # Apply ArgoCD Application (ignoreDifferences update)
+            if [ -f "k8s/13-argocd-application.yaml" ]; then
+              echo "   Applying ArgoCD Application..."
+              kubectl apply -f k8s/13-argocd-application.yaml -n "$ARGOCD_NAMESPACE" || {
+                echo "⚠️  Failed to apply ArgoCD Application, continuing..."
+              }
+            fi
+            
+            echo "✅ ArgoCD configuration files applied"
+          else
+            echo "⏭️  ArgoCD configuration files unchanged, skipping apply (no pod restart needed)"
+          fi
+      
+      - name: Trigger ArgoCD refresh for deployment sync
+        if: steps.login-ecr.outcome == 'success' && steps.update-images.outputs.has_changes == 'true'
+        run: |
+          echo "🔄 Triggering ArgoCD refresh to ensure deployment sync..."
+          
+          # Determine ArgoCD namespace (check where ArgoCD Application is installed)
+          ARGOCD_NAMESPACE="argocd"
+          if ! kubectl get application finans-asistan -n "$ARGOCD_NAMESPACE" >/dev/null 2>&1; then
+            # Fallback: try finans-asistan namespace (for backward compatibility)
+            if kubectl get application finans-asistan -n finans-asistan >/dev/null 2>&1; then
+              ARGOCD_NAMESPACE="finans-asistan"
+              echo "⚠️  Using legacy namespace 'finans-asistan' for ArgoCD Application"
+            else
+              echo "⚠️  ArgoCD Application 'finans-asistan' not found in 'argocd' or 'finans-asistan' namespace, skipping refresh"
+              exit 0
+            fi
+          fi
+          
+          echo "   Using ArgoCD namespace: $ARGOCD_NAMESPACE"
+          
+          # Trigger hard refresh by patching annotation (this triggers ArgoCD to re-read Git)
+          echo "   Triggering ArgoCD hard refresh..."
+          kubectl patch application finans-asistan -n "$ARGOCD_NAMESPACE" \
+            -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}' \
+            --type merge 2>&1 || {
+            echo "⚠️  Failed to trigger refresh, ArgoCD will sync automatically"
+          }
+          
+          # Wait a moment for refresh to trigger
+          sleep 2
+          
+          # Remove annotation to allow future refreshes
+          kubectl patch application finans-asistan -n "$ARGOCD_NAMESPACE" \
+            -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":null}}}' \
+            --type merge 2>&1 || true
+          
+          echo "✅ ArgoCD refresh triggered - sync should happen automatically"
+
+
