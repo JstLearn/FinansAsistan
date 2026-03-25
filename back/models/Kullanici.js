@@ -1,0 +1,2 @@
+// back/models/Kullanici.js
+

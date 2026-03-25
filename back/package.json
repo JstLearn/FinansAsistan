@@ -1,0 +1,68 @@
+{
+  "name": "backend_projesi",
+  "version": "1.0.0",
+  "main": "back.js",
+  "scripts": {
+    "start": "node back.js",
+    "dev": "nodemon back.js",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "test:unit": "jest --testPathPattern=tests/unit",
+    "test:integration": "jest --testPathPattern=tests/integration",
+    "test:e2e": "jest --testPathPattern=tests/e2e"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "body-parser": "^1.20.3",
+    "cors": "^2.8.5",
+    "dotenv": "16.6.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "express-validator": "7.3.1",
+    "ioredis": "^5.3.2",
+    "joi": "^18.0.2",
+    "js-yaml": "^4.1.1",
+    "jsonwebtoken": "^9.0.3",
+    "kafkajs": "^2.2.4",
+    "morgan": "^1.10.0",
+    "nodemailer": "^7.0.11",
+    "pg": "^8.11.3",
+    "prom-client": "^15.1.0",
+    "rate-limit-redis": "4.3.1",
+    "uuid": "^13.0.0",
+    "winston": "3.19.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
+    "nodemon": "3.1.11",
+    "supertest": "^6.3.3"
+  },
+  "overrides": {
+    "jws": "^3.2.3"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "/tests/"
+    ],
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ],
+    "collectCoverageFrom": [
+      "**/*.js",
+      "!**/node_modules/**",
+      "!**/tests/**",
+      "!back.js"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 70,
+        "functions": 70,
+        "lines": 70,
+        "statements": 70
+      }
+    }
+  }
+}
