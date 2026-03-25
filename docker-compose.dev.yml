@@ -1,10 +1,7 @@
 # ════════════════════════════════════════════════════════════
 # FinansAsistan - Development Docker Compose
-# Full Stack Development Environment
+# Application Stack (Postgres, Kafka, Redis, Backend, Frontend)
 # ════════════════════════════════════════════════════════════
-
-# Note: Environment variables are set by the setup script
-# No env_file needed - variables come from QUICK_START/.env via setup script
 
 services:
   # ──────────────────────────────────────────────────────────
@@ -18,37 +15,17 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
-      # WAL Archiving için AWS credentials
-      S3_BUCKET: ${S3_BUCKET}
-      S3_PREFIX: postgres/wal
-      AWS_REGION: ${AWS_REGION}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data_dev:/var/lib/postgresql/data
-      - ./scripts/archive-wal.sh:/scripts/archive-wal.sh:ro
-      - ./scripts/init-postgres-wal.sh:/docker-entrypoint-initdb.d/99-init-wal.sh:ro
       - ./bootstrap/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-      - ./scripts/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql:ro
-    entrypoint: >
-      sh -c "
-        apk add --no-cache aws-cli bash > /dev/null 2>&1 || true &&
-        exec docker-entrypoint.sh postgres
-        -c wal_level=replica
-        -c archive_mode=on
-        -c archive_command='/scripts/archive-wal.sh %p'
-        -c archive_timeout=300
-        -c max_wal_size=1GB
-        -c min_wal_size=80MB
-      "
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1"]
       interval: 10s
       timeout: 5s
-      start_period: 180s
-      retries: 20
+      start_period: 30s
+      retries: 10
     restart: unless-stopped
     networks:
       - finans-network
@@ -129,11 +106,9 @@ services:
       PORT: 5000
       DB_HOST: postgres
       DB_PORT: 5432
-      # POSTGRES_* variables (primary)
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      # DB_* variables (backward compatibility)
       DB_NAME: ${POSTGRES_DB}
       DB_USER: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
@@ -169,7 +144,7 @@ services:
       - finans-network
 
   # ──────────────────────────────────────────────────────────
-  # Frontend (React Native Web)
+  # Frontend (React)
   # ──────────────────────────────────────────────────────────
   frontend:
     image: node:20-alpine
@@ -197,260 +172,6 @@ services:
     networks:
       - finans-network
 
-  # ──────────────────────────────────────────────────────────
-  # Event Processor (Kafka Consumer)
-  # ──────────────────────────────────────────────────────────
-  event-processor:
-    build:
-      context: .
-      dockerfile: ./services/event-processor/Dockerfile
-    container_name: finans-event-processor-dev
-    environment:
-      NODE_ENV: development
-      KAFKA_BROKERS: kafka:9092
-      KAFKA_CLIENT_ID: event-processor-dev
-      KAFKA_CONSUMER_GROUP: event-processor-group
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB}
-      DB_USER: ${POSTGRES_USER}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
-      REDIS_URL: redis://redis:6379
-      EMAIL_USER: ${EMAIL_USER}
-      EMAIL_PASS: ${EMAIL_PASS}
-      IMAP_HOST: ${IMAP_HOST:-}
-      IMAP_PORT: ${IMAP_PORT:-}
-      IMAP_SSL: ${IMAP_SSL:-}
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT}
-      SMTP_SSL: ${SMTP_SSL}
-    volumes:
-      - ./services/event-processor:/app
-      - /app/node_modules
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'node.*event-processor' > /dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
-      start_period: 120s
-      retries: 10
-    restart: unless-stopped
-    networks:
-      - finans-network
-
-  # ──────────────────────────────────────────────────────────
-  # Prometheus (Metrics Collection)
-  # ──────────────────────────────────────────────────────────
-  prometheus:
-    image: prom/prometheus:v2.48.0
-    container_name: finans-prometheus-dev
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
-      - ./monitoring/prometheus/recording-rules.yml:/etc/prometheus/recording-rules.yml:ro
-      - prometheus_data_dev:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=30d'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-    networks:
-      - finans-network
-    restart: unless-stopped
-
-  # ──────────────────────────────────────────────────────────
-  # Grafana (Visualization)
-  # ──────────────────────────────────────────────────────────
-  grafana:
-    image: grafana/grafana:10.2.0
-    container_name: finans-grafana-dev
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-      - GF_INSTALL_PLUGINS=grafana-piechart-panel
-      - GF_SERVER_ROOT_URL=http://localhost:3000
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana_data_dev:/var/lib/grafana
-      - ./monitoring/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
-      - ./monitoring/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    depends_on:
-      - prometheus
-      - loki
-    networks:
-      - finans-network
-    restart: unless-stopped
-
-  # ──────────────────────────────────────────────────────────
-  # AlertManager (Alert Management)
-  # ──────────────────────────────────────────────────────────
-  alertmanager:
-    image: prom/alertmanager:v0.26.0
-    container_name: finans-alertmanager-dev
-    ports:
-      - "9095:9095"
-    volumes:
-      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - alertmanager_data_dev:/alertmanager
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-      - '--web.listen-address=0.0.0.0:9095'
-      - '--web.external-url=http://localhost:9095'
-    environment:
-      - SMTP_USER=${EMAIL_USER}
-      - SMTP_PASSWORD=${EMAIL_PASS}
-    depends_on:
-      - prometheus
-    networks:
-      - finans-network
-    restart: unless-stopped
-
-  # ──────────────────────────────────────────────────────────
-  # PostgreSQL Exporter (Database Metrics)
-  # ──────────────────────────────────────────────────────────
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.15.0
-    container_name: finans-postgres-exporter-dev
-    environment:
-      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/postgres?sslmode=disable"
-      PG_EXCLUDE_DATABASES: "template0,template1"
-    ports:
-      - "9187:9187"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - finans-network
-    restart: unless-stopped
-
-  # ──────────────────────────────────────────────────────────
-  # Redis Exporter (Cache Metrics)
-  # ──────────────────────────────────────────────────────────
-  redis-exporter:
-    image: oliver006/redis_exporter:v1.55.0
-    container_name: finans-redis-exporter-dev
-    environment:
-      REDIS_ADDR: "redis://redis:6379"
-    ports:
-      - "9121:9121"
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - finans-network
-    restart: unless-stopped
-
-  # ──────────────────────────────────────────────────────────
-  # Kafka Exporter (JMX Exporter for Kafka Metrics)
-  # ──────────────────────────────────────────────────────────
-  kafka-exporter:
-    image: danielqsj/kafka-exporter:v1.7.0
-    container_name: finans-kafka-exporter-dev
-    command:
-      - '--kafka.server=kafka:9092'
-    ports:
-      - "9308:9308"
-    depends_on:
-      kafka:
-        condition: service_healthy
-    networks:
-      - finans-network
-    restart: unless-stopped
-
-  # ──────────────────────────────────────────────────────────
-  # Loki (Log Aggregation)
-  # ──────────────────────────────────────────────────────────
-  loki:
-    image: grafana/loki:2.9.2
-    container_name: finans-loki-dev
-    ports:
-      - "3100:3100"
-    volumes:
-      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
-      - loki_data_dev:/loki
-    command: -config.file=/etc/loki/local-config.yaml
-    networks:
-      - finans-network
-    restart: unless-stopped
-
-  # ──────────────────────────────────────────────────────────
-  # Promtail (Log Shipper for Loki)
-  # ──────────────────────────────────────────────────────────
-  promtail:
-    image: grafana/promtail:2.9.2
-    container_name: finans-promtail-dev
-    volumes:
-      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: -config.file=/etc/promtail/config.yml
-    depends_on:
-      - loki
-    networks:
-      - finans-network
-    restart: unless-stopped
-
-  # ──────────────────────────────────────────────────────────
-  # PostgreSQL Backup Service (S3)
-  # ──────────────────────────────────────────────────────────
-  postgres-backup:
-    image: postgres:16-alpine
-    container_name: finans-postgres-backup-dev
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB}
-      DB_NAME: ${POSTGRES_DB}  # Backward compatibility
-      POSTGRES_USER: ${POSTGRES_USER}
-      DB_USER: ${POSTGRES_USER}  # Backward compatibility
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}  # Backward compatibility
-      S3_BUCKET: ${S3_BUCKET}
-      S3_PREFIX: postgres/backups
-      AWS_REGION: ${AWS_REGION}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      BACKUP_INTERVAL: ${BACKUP_INTERVAL:-300}  # 5 minutes (300 seconds) - default backup interval
-    volumes:
-      - ./scripts:/scripts
-      - backup_data_dev:/tmp/postgres-backups
-    command: >
-      sh -c "
-        apk add --no-cache postgresql-client aws-cli gzip &&
-        chmod +x /scripts/backup-postgres.sh &&
-        echo 'Starting backup service...' &&
-        echo 'Backup interval: ${BACKUP_INTERVAL} seconds' &&
-        while true; do
-          /scripts/backup-postgres.sh || echo 'Backup failed, will retry...';
-          sleep ${BACKUP_INTERVAL};
-        done
-      "
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'backup-postgres.sh' > /dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
-      start_period: 90s
-      retries: 10
-    restart: unless-stopped
-    networks:
-      - finans-network
-
 # ══════════════════════════════════════════════════════════════
 # Networks
 # ══════════════════════════════════════════════════════════════
@@ -469,13 +190,3 @@ volumes:
     name: finans-kafka-data-dev
   redis_data_dev:
     name: finans-redis-data-dev
-  backup_data_dev:
-    name: finans-backup-data-dev
-  prometheus_data_dev:
-    name: finans-prometheus-data-dev
-  grafana_data_dev:
-    name: finans-grafana-data-dev
-  alertmanager_data_dev:
-    name: finans-alertmanager-data-dev
-  loki_data_dev:
-    name: finans-loki-data-dev

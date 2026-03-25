@@ -6,14 +6,14 @@
 
 const { Pool } = require('pg');
 const path = require("path");
-// Try to load .env from QUICK_START/.env first, then fallback to root .env
+// Try to load .env from ../bootstrap/.env first, then fallback to root .env
 // Note: In Docker, environment variables are already set by Docker Compose, so dotenv is optional
 try {
-  require("dotenv").config({ path: path.join(__dirname, "../../QUICK_START/.env") });
+  require("dotenv").config({ path: path.join(__dirname, "../bootstrap/.env") });
 } catch (e) {
-  // If QUICK_START/.env doesn't exist, try root .env
+  // If bootstrap/.env doesn't exist, try root .env
   try {
-require("dotenv").config({ path: path.join(__dirname, "../../.env") });
+    require("dotenv").config({ path: path.join(__dirname, "../../.env") });
   } catch (e2) {
     // If neither exists, rely on environment variables set by Docker Compose
     console.log("ℹ️  No .env file found, using environment variables from Docker Compose");
