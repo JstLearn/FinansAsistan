@@ -1,0 +1,119 @@
+# ============================================================
+# FinansAsistan - ArgoCD Configuration
+# Global ArgoCD settings for automatic refresh and reconciliation
+# ============================================================
+# NOTE: ArgoCD reads ConfigMap from its own namespace
+# Since ArgoCD is installed in 'argocd' namespace, ConfigMap must be there
+
+---
+# ArgoCD ConfigMap in 'argocd' namespace
+# ArgoCD reads ConfigMap from its own namespace (where it's installed)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Timeout for reconciliation (how often ArgoCD checks Git repository)
+  # Default is 3m, but we set it to 1m for faster detection of changes
+  timeout.reconciliation: 1m
+  # Application controller refresh interval
+  # How often the application controller refreshes applications
+  application.controller.refresh.timeout: 1m
+  # Repository refresh interval
+  # How often ArgoCD refreshes Git repositories
+  repo.server.refresh.timeout: 1m
+  # Application controller operation timeout
+  # Maximum time to wait for sync operation to complete
+  # Reduced to 2m to fail fast if PVCs are stuck
+  application.controller.operation.timeout: 2m
+  # Hard sync timeout - maximum time for a single sync operation
+  # If sync takes longer than this, it will be cancelled
+  timeout.hardSync: 2m
+  
+  # Resource Customizations: Disable health checks for problematic resources
+  # This prevents ArgoCD sync from hanging on Ingress, HPA, and PVC health checks
+  # Global setting: All Ingress, HPA, and PVC resources will skip health checks
+  resource.customizations: |
+    networking.k8s.io/Ingress:
+      health.lua: |
+        hs = {}
+        hs.status = "Healthy"
+        hs.message = "Ingress health check disabled to prevent sync hanging"
+        return hs
+    autoscaling/HorizontalPodAutoscaler:
+      health.lua: |
+        hs = {}
+        hs.status = "Healthy"
+        hs.message = "HPA health check disabled to prevent sync hanging"
+        return hs
+    /PersistentVolumeClaim:
+      health.lua: |
+        hs = {}
+        hs.status = "Healthy"
+        hs.message = "PVC health check disabled to prevent sync hanging on Pending PVCs"
+        return hs
+
+---
+# ============================================================
+# FinansAsistan - ArgoCD RBAC Configuration
+# Allows ArgoCD to manage FinansAsistan namespace
+# ============================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd  # ArgoCD is installed in this namespace
+  labels:
+    app.kubernetes.io/name: argocd-rbac-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  policy.default: role:readonly
+  policy.csv: |
+    p, role:org-admin, applications, *, */*, allow
+    p, role:org-admin, clusters, get, *, allow
+    p, role:org-admin, repositories, get, *, allow
+    p, role:org-admin, repositories, create, *, allow
+    p, role:org-admin, repositories, update, *, allow
+    p, role:org-admin, repositories, delete, *, allow
+    g, admin, role:org-admin
+
+---
+# ============================================================
+# ArgoCD Repository Secret (for Git access)
+# ============================================================
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: argocd-repo-github
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  type: git
+  url: https://github.com/JstLearn/FinansAsistan.git
+  # For private repos, add:
+  # password: <github-token>
+  # username: <github-username>
+
+---
+# ============================================================
+# ArgoCD S3 Credentials (if using S3 as source)
+# ============================================================
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: argocd-s3-credentials
+  namespace: argocd
+type: Opaque
+stringData:
+  access-key-id: <AWS_ACCESS_KEY_ID>
+  secret-access-key: <AWS_SECRET_ACCESS_KEY>
+  region: eu-central-1

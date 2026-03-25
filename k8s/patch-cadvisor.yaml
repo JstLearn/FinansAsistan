@@ -1,0 +1,16 @@
+spec:
+  template:
+    spec:
+      containers:
+      - name: cadvisor
+        command: ["/bin/sh", "-c"]
+        args:
+        - >-
+          /usr/bin/cadvisor
+          --housekeeping_interval=30s
+          --max_housekeeping_interval=60s
+          --containerd=/run/containerd/containerd.sock
+          --docker=unix:///dev/null
+          --store_container_labels=false
+          --disable_metrics=disk,tcp,udp,percpu,sched,process,referenced_memory,cpu_topology,resctrl,advtcp
+          2>&1 | grep -vE "failed to identify|Failed to create existing container"
