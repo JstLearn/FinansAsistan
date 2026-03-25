@@ -1,0 +1,111 @@
+# ════════════════════════════════════════════════════════════
+# AlertManager Configuration
+# ════════════════════════════════════════════════════════════
+
+global:
+  resolve_timeout: 5m
+  # SMTP configuration for email alerts
+  smtp_smarthost: 'mail.finansasistan.com:587'
+  smtp_from: 'hello@finansasistan.com'
+  smtp_auth_username: '${SMTP_USER}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+  smtp_require_tls: true
+
+# Templates for alert notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree
+route:
+  receiver: 'default-receiver'
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      continue: true
+
+    # Warning alerts - delayed notification
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 1m
+      group_interval: 5m
+      repeat_interval: 24h
+
+    # Database alerts
+    - match:
+        alertname: DatabaseConnectionFailed
+      receiver: 'database-team'
+      continue: true
+
+    # Backend API alerts
+    - match:
+        job: backend-api
+      receiver: 'backend-team'
+      continue: true
+
+# Inhibition rules (suppress alerts when other alerts fire)
+inhibit_rules:
+  # Suppress warning alerts when critical alerts fire
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']
+
+# Receivers
+receivers:
+  - name: 'default-receiver'
+    email_configs:
+      - to: 'devops@finansasistan.com'
+        headers:
+          Subject: 'FinansAsistan Alert: {{ .GroupLabels.alertname }}'
+        html: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'oncall@finansasistan.com'
+        headers:
+          Subject: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>Critical Alert</h2>
+          <p><strong>Alert:</strong> {{ .GroupLabels.alertname }}</p>
+          <p><strong>Service:</strong> {{ .GroupLabels.service }}</p>
+          <p><strong>Description:</strong> {{ range .Alerts }}{{ .Annotations.description }}{{ end }}</p>
+          <p><strong>Time:</strong> {{ .StartsAt }}</p>
+    # Slack webhook (if configured)
+    # webhook_configs:
+    #   - url: '${SLACK_WEBHOOK_URL}'
+    #     send_resolved: true
+
+  - name: 'warning-alerts'
+    email_configs:
+      - to: 'devops@finansasistan.com'
+        headers:
+          Subject: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>Warning Alert</h2>
+          <p><strong>Alert:</strong> {{ .GroupLabels.alertname }}</p>
+          <p><strong>Service:</strong> {{ .GroupLabels.service }}</p>
+          <p><strong>Description:</strong> {{ range .Alerts }}{{ .Annotations.description }}{{ end }}</p>
+
+  - name: 'database-team'
+    email_configs:
+      - to: 'dba@finansasistan.com'
+        headers:
+          Subject: 'Database Alert: {{ .GroupLabels.alertname }}'
+        html: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+  - name: 'backend-team'
+    email_configs:
+      - to: 'backend@finansasistan.com'
+        headers:
+          Subject: 'Backend Alert: {{ .GroupLabels.alertname }}'
+        html: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
