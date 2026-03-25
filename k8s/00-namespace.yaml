@@ -1,0 +1,12 @@
+# ============================================================
+# FinansAsistan - Kubernetes Namespace
+# ============================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: finans-asistan
+  labels:
+    name: finans-asistan
+    environment: production
+

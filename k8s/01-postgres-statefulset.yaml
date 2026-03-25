@@ -1,0 +1,246 @@
+# ============================================================
+# FinansAsistan - PostgreSQL StatefulSet
+# PostgreSQL 16 with WAL-G backup to S3
+# ============================================================
+# Note: PVC is managed by StatefulSet volumeClaimTemplates
+# Do NOT create separate PVC - it will conflict with StatefulSet
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: finans-asistan
+spec:
+  serviceName: postgres-headless
+  replicas: 1  # Will be scaled by HPA based on node count
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      # Schedule PostgreSQL only on leader node (physical or EC2)
+      # HPA cannot scale this service - must stay on leader node only
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: leader
+                operator: In
+                values:
+                - "true"
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: IMAGE_DIGEST
+          value: "latest"
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: POSTGRES_DB
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "128Mi"  # Minimum request - start small, scale with HPA
+            cpu: "100m"      # Minimum request - start small, scale with HPA
+          limits:
+            memory: "4Gi"     # R6G Large: 16GB RAM, ~14.4GB usable, PostgreSQL gets 4GB
+            cpu: "1000m"       # Limit = request * 10 (100m * 10)
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+      - name: wal-g-backup
+        image: chekkan/wal-g:latest  # Using community-maintained image (wal-g/wal-g doesn't exist on Docker Hub)
+        command:
+        - /bin/sh
+        - -c
+        - |
+          export WALG_S3_PREFIX="s3://${S3_BUCKET}/postgres/"
+          CHECK_INTERVAL=300  # Check every 5 minutes
+          
+          # Install PostgreSQL client for LSN checks
+          apk add --no-cache postgresql-client > /dev/null 2>&1 || true
+          
+          # Store last known LSN
+          LAST_KNOWN_LSN_FILE="/tmp/last_backup_lsn.txt"
+          
+          while true; do
+            # Get current WAL LSN from PostgreSQL
+            CURRENT_LSN=$(PGPASSWORD="${POSTGRES_PASSWORD}" psql -h localhost -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -t -A -c "SELECT pg_current_wal_lsn();" 2>/dev/null | tr -d ' \n\r' || echo "")
+            
+            if [ -z "$CURRENT_LSN" ]; then
+              echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Warning: Could not get current LSN, creating backup anyway..."
+              wal-g backup-push /var/lib/postgresql/data/pgdata || echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Backup failed, will retry at next check..."
+              sleep $CHECK_INTERVAL
+              continue
+            fi
+            
+            # Check if we have a stored LSN
+            if [ -f "$LAST_KNOWN_LSN_FILE" ]; then
+              LAST_KNOWN_LSN=$(cat "$LAST_KNOWN_LSN_FILE" | tr -d ' \n\r')
+              
+              # Compare LSNs - if they're the same, no changes occurred (exit silently to reduce log noise)
+              if [ "$LAST_KNOWN_LSN" = "$CURRENT_LSN" ]; then
+                # No changes - skip silently
+                :
+              else
+                # Changes detected - log and backup
+                echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Database changes detected (LSN: $LAST_KNOWN_LSN -> $CURRENT_LSN), creating backup..."
+                wal-g backup-push /var/lib/postgresql/data/pgdata && {
+                  # Backup successful, update stored LSN
+                  echo "$CURRENT_LSN" > "$LAST_KNOWN_LSN_FILE"
+                  echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Backup completed successfully"
+                } || echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Backup failed, will retry at next check..."
+              fi
+            else
+              # No stored LSN - check if backup exists in S3
+              LAST_BACKUP=$(wal-g backup-list 2>/dev/null | head -2 | tail -1 || echo "")
+              
+              if [ -n "$LAST_BACKUP" ]; then
+                # Backup exists, but we don't have stored LSN - create backup and store LSN
+                echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Previous backup found but LSN not stored, creating backup..."
+                wal-g backup-push /var/lib/postgresql/data/pgdata && {
+                  echo "$CURRENT_LSN" > "$LAST_KNOWN_LSN_FILE"
+                  echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Backup completed successfully"
+                } || echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Backup failed, will retry at next check..."
+              else
+                # No previous backup, create one
+                echo "[$(date +%Y-%m-%d\ %H:%M:%S)] No previous backup found, creating initial backup..."
+                wal-g backup-push /var/lib/postgresql/data/pgdata && {
+                  echo "$CURRENT_LSN" > "$LAST_KNOWN_LSN_FILE"
+                  echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Initial backup completed successfully"
+                } || echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Backup failed, will retry at next check..."
+              fi
+            fi
+            
+            sleep $CHECK_INTERVAL
+          done
+        env:
+        - name: S3_BUCKET
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: S3_BUCKET
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: AWS_SECRET_ACCESS_KEY
+        - name: AWS_REGION
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: AWS_REGION
+        # PostgreSQL connection credentials for backup script
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: POSTGRES_DB
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"   # Minimum request - start small, scale with HPA
+            cpu: "50m"       # Minimum request - start small, scale with HPA
+          limits:
+            memory: "640Mi"  # Limit = request * 10 (64Mi * 10)
+            cpu: "500m"      # Limit = request * 10 (50m * 10)
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 50Gi
+      storageClassName: hostpath
+      # Docker Desktop Kubernetes için hostpath kullanılıyor
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: finans-asistan
+spec:
+  clusterIP: None
+  sessionAffinity: None
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: finans-asistan
+spec:
+  type: ClusterIP
+  publishNotReadyAddresses: true  # Allow connections even if wal-g-backup container is not ready
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+

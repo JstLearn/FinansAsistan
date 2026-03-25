@@ -1,0 +1,165 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: finans-asistan
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+      annotations:
+        argocd.argoproj.io/sync-wave: '0'
+        app.finans-asistan.io/image-digest: sha256:1e71ef5640582796f0afd26b0b097ca2c92d2c1b2744b88b9fd3c76eee52719c
+        deployment.kubernetes.io/commit-sha: 9a007c8241972ee8ab8b5d574798d640520eb0a0
+        deployment.kubernetes.io/deployment-timestamp: '20251220144056'
+        deployment.kubernetes.io/revision: 20251220144056-9a007c8
+        kubectl.kubernetes.io/restartedAt: '2025-12-20T14:42:07Z'
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '5000'
+        prometheus.io/path: /metrics
+    spec:
+      serviceAccountName: init-container
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      initContainers:
+      - name: wait-for-dependencies
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/sh
+        - -c
+        - "echo \"Waiting for dependencies: PostgreSQL, Redis, Kafka...\"\nmax_wait=600  # 10 minutes max\nelapsed=0\ncheck_interval=5\n\nwhile [ $elapsed -lt $max_wait ]; do\n  all_ready=true\n  \n  # Check PostgreSQL StatefulSet\n  pg_ready=$(kubectl get statefulset postgres -n finans-asistan -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo \"0\")\n  pg_desired=$(kubectl get statefulset postgres -n finans-asistan -o jsonpath='{.spec.replicas}' 2>/dev/null || echo \"1\")\n  if [ \"$pg_ready\" != \"$pg_desired\" ] || [ -z \"$pg_ready\" ] || [ \"$pg_ready\" = \"0\" ]; then\n    all_ready=false\n  fi\n  \n  # Check Redis Deployment\n  redis_ready=$(kubectl get deployment redis -n finans-asistan -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo \"0\")\n  redis_desired=$(kubectl get deployment redis -n finans-asistan -o jsonpath='{.spec.replicas}' 2>/dev/null || echo \"1\")\n  if [ \"$redis_ready\" != \"$redis_desired\" ] || [ -z \"$redis_ready\" ] || [ \"$redis_ready\" = \"\
+          0\" ]; then\n    all_ready=false\n  fi\n  \n  # Check Kafka cluster\n  kafka_status=$(kubectl get kafka kafka-cluster -n finans-asistan -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null || echo \"\")\n  if [ \"$kafka_status\" != \"True\" ]; then\n    all_ready=false\n  fi\n  \n  if [ \"$all_ready\" = true ]; then\n    echo \"All dependencies are ready!\"\n    exit 0\n  fi\n  \n  echo \"Dependencies not ready yet (${elapsed}s elapsed): PostgreSQL=${pg_ready}/${pg_desired}, Redis=${redis_ready}/${redis_desired}, Kafka=${kafka_status}\"\n  sleep $check_interval\n  elapsed=$((elapsed + check_interval))\ndone\n\necho \"Timeout waiting for dependencies to be ready\"\nexit 1\n"
+        resources:
+          requests:
+            memory: 32Mi
+            cpu: 10m
+          limits:
+            memory: 64Mi
+            cpu: 100m
+      containers:
+      - name: backend
+        image: 050907117703.dkr.ecr.eu-central-1.amazonaws.com/finans-asistan-backend-production:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+          name: http
+        env:
+        - name: IMAGE_DIGEST
+          value: '20251220144056'
+        - name: NODE_ENV
+          value: production
+        - name: PORT
+          value: '5000'
+        - name: DB_HOST
+          value: postgres
+        - name: DB_PORT
+          value: '5432'
+        - name: DB_SSL
+          value: 'false'
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: POSTGRES_PASSWORD
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: redis-url
+        - name: KAFKA_BROKERS
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: kafka-brokers
+        - name: KAFKA_CLIENT_ID
+          value: finans-backend
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: jwt-secret
+        - name: EMAIL_USER
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: email-user
+        - name: EMAIL_PASS
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: email-pass
+        - name: SMTP_HOST
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: SMTP_HOST
+        - name: SMTP_PORT
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: SMTP_PORT
+        - name: SMTP_SSL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: SMTP_SSL
+        - name: CORS_ORIGINS
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: CORS_ORIGINS
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 1280Mi
+            cpu: 1000m
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: finans-asistan
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+  - port: 5000
+    targetPort: 5000
+    name: http
