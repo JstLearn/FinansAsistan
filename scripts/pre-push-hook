@@ -1,0 +1,57 @@
+#!/bin/sh
+# Pre-push hook: Pull k8s deployment files before pushing to avoid merge conflicts
+# This ensures local k8s files are synced with GitHub Actions workflow updates
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo "${YELLOW}🔄 Pre-push hook: Checking for k8s file updates...${NC}"
+
+# Get the remote branch name
+remote="$1"
+url="$2"
+
+# Check if we're pushing to master/main branch
+if [ "$remote" = "origin" ] && (echo "$url" | grep -q "master\|main"); then
+    echo "${YELLOW}📥 Fetching latest changes from remote...${NC}"
+    
+    # Fetch latest changes
+    git fetch "$remote" master 2>/dev/null || git fetch "$remote" main 2>/dev/null
+    
+    # Check if k8s deployment files have changed on remote
+    K8S_FILES="k8s/04-backend-deployment.yaml k8s/05-frontend-deployment.yaml k8s/11-event-processor.yaml k8s/13-argocd-application.yaml"
+    NEEDS_PULL=false
+    
+    for file in $K8S_FILES; do
+        if [ -f "$file" ]; then
+            # Check if remote version is different
+            if ! git diff --quiet "HEAD" "$remote/master:$file" 2>/dev/null && ! git diff --quiet "HEAD" "$remote/main:$file" 2>/dev/null; then
+                NEEDS_PULL=true
+                echo "${YELLOW}⚠️  $file has been updated on remote${NC}"
+            fi
+        fi
+    done
+    
+    if [ "$NEEDS_PULL" = true ]; then
+        echo "${YELLOW}📥 Pulling latest k8s deployment files to avoid merge conflicts...${NC}"
+        
+        # Pull only k8s files to avoid conflicts with other changes
+        for file in $K8S_FILES; do
+            if git show "$remote/master:$file" >/dev/null 2>&1 || git show "$remote/main:$file" >/dev/null 2>&1; then
+                echo "${GREEN}✅ Updating $file${NC}"
+                git checkout "$remote/master:$file" "$file" 2>/dev/null || git checkout "$remote/main:$file" "$file" 2>/dev/null
+            fi
+        done
+        
+        echo "${GREEN}✅ K8s files updated. You can now push safely.${NC}"
+        echo "${YELLOW}💡 Tip: Review the changes with 'git diff' before pushing${NC}"
+    else
+        echo "${GREEN}✅ K8s files are up to date${NC}"
+    fi
+fi
+
+exit 0
+
