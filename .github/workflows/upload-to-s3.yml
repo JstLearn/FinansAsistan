@@ -1,0 +1,164 @@
+name: Upload Complete Project to S3
+
+on:
+  push:
+    branches:
+      - master  # Master branch trigger (production)
+      - main    # Main branch trigger
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      upload_reason:
+        description: 'Reason for manual upload'
+        required: false
+        default: 'manual'
+
+env:
+  AWS_REGION: eu-central-1
+  S3_BUCKET: jstlearn-finans-backup
+  S3_PREFIX: project-files
+
+jobs:
+  upload-to-s3:
+    name: Upload Project Files to S3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create project archive
+        run: |
+          # Get current date and commit info
+          DATE=$(date -u +%Y%m%d-%H%M%S)
+          COMMIT_SHORT=$(echo ${{ github.sha }} | cut -c1-7)
+          BRANCH=$(echo ${{ github.ref_name }} | sed 's/\//-/g')
+          
+          echo "Creating archive for branch: $BRANCH, commit: $COMMIT_SHORT"
+          
+          # Create a compressed archive of the entire project
+          # Exclude unnecessary files
+          tar -czf /tmp/finans-asistan-${DATE}-${COMMIT_SHORT}.tar.gz \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='*.log' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='terraform/.terraform' \
+            --exclude='terraform/**/.terraform' \
+            --exclude='*.tfstate' \
+            --exclude='*.tfstate.backup' \
+            --exclude='front/build' \
+            --exclude='front/dist' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.DS_Store' \
+            .
+          
+          echo "Archive created: finans-asistan-${DATE}-${COMMIT_SHORT}.tar.gz"
+          ls -lh /tmp/finans-asistan-*.tar.gz
+          
+          # Store filename for later steps
+          echo "ARCHIVE_NAME=finans-asistan-${DATE}-${COMMIT_SHORT}.tar.gz" >> $GITHUB_ENV
+          echo "DATE=${DATE}" >> $GITHUB_ENV
+          echo "COMMIT_SHORT=${COMMIT_SHORT}" >> $GITHUB_ENV
+          echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
+
+      - name: Upload archive to S3
+        run: |
+          # Upload to S3 with versioned path
+          aws s3 cp \
+            /tmp/${{ env.ARCHIVE_NAME }} \
+            s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/archives/${{ env.BRANCH }}/${{ env.ARCHIVE_NAME }} \
+            --storage-class STANDARD_IA
+          
+          echo "Archive uploaded to S3"
+
+      - name: Upload individual files to S3
+        run: |
+          # Sync the project files directly to S3 (excluding unnecessary files)
+          aws s3 sync . \
+            s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/latest/ \
+            --exclude '.git/*' \
+            --exclude 'node_modules/*' \
+            --exclude '*.log' \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude 'terraform/.terraform/*' \
+            --exclude 'terraform/**/.terraform/*' \
+            --exclude '*.tfstate' \
+            --exclude '*.tfstate.backup' \
+            --exclude 'front/build/*' \
+            --exclude 'front/dist/*' \
+            --exclude '__pycache__/*' \
+            --exclude '*.pyc' \
+            --exclude '.DS_Store' \
+            --delete \
+            --storage-class STANDARD
+          
+          echo "Project files synced to S3 latest/"
+
+      - name: Upload commit-specific snapshot
+        run: |
+          # Also save a snapshot for this specific commit
+          aws s3 sync . \
+            s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/commits/${{ github.sha }}/ \
+            --exclude '.git/*' \
+            --exclude 'node_modules/*' \
+            --exclude '*.log' \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude 'terraform/.terraform/*' \
+            --exclude '*.tfstate' \
+            --exclude '*.tfstate.backup' \
+            --exclude 'front/build/*' \
+            --exclude 'front/dist/*' \
+            --exclude '__pycache__/*' \
+            --exclude '*.pyc' \
+            --exclude '.DS_Store' \
+            --storage-class STANDARD_IA
+          
+          echo "Commit snapshot saved to S3"
+
+      - name: Update latest.json metadata
+        run: |
+          # Create metadata file
+          cat > /tmp/latest.json <<EOF
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "commit": "${{ github.sha }}",
+            "commit_short": "${{ env.COMMIT_SHORT }}",
+            "branch": "${{ github.ref_name }}",
+            "archive": "${{ env.S3_PREFIX }}/archives/${{ env.BRANCH }}/${{ env.ARCHIVE_NAME }}",
+            "files_path": "${{ env.S3_PREFIX }}/latest/",
+            "author": "${{ github.actor }}",
+            "message": "${{ github.event.head_commit.message }}"
+          }
+          EOF
+          
+          aws s3 cp /tmp/latest.json \
+            s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/latest.json
+          
+          echo "Metadata updated"
+          cat /tmp/latest.json
+
+      - name: Summary
+        run: |
+          echo "=== S3 Upload Summary ==="
+          echo "Bucket: ${{ env.S3_BUCKET }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Archive: ${{ env.ARCHIVE_NAME }}"
+          echo ""
+          echo "S3 Paths:"
+          echo "  Archive: s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/archives/${{ env.BRANCH }}/${{ env.ARCHIVE_NAME }}"
+          echo "  Latest: s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/latest/"
+          echo "  Commit: s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/commits/${{ github.sha }}/"
+          echo "  Metadata: s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }}/latest.json"
