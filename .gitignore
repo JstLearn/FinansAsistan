@@ -6,39 +6,49 @@
 terraform.tfvars
 *.tfvars
 *.zip
-tf-output.json
+tfplan
+*.tfplan
 
-# Node.js
+# Node modules
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+front/node_modules/
+back/node_modules/
 
-# Environment files
+# Python virtual environment
+data_collector/venv/
+*.pyc
+__pycache__/
+
+# Environment variables
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
+QUICK_START/.env
+
+# Kubernetes secrets (contains sensitive data)
+# Note: These files are created by GitHub Actions workflow for ArgoCD sync
+# They are committed to Git but contain base64-encoded or stringData values
+# Original secrets only exist in: Local .env, S3 .env, GitHub Secrets
+# k8s/01-secrets.yaml  # Commented out - needed for ArgoCD sync
+
+# IDE
+.vscode/
+.cursor
+.trae
+.idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs
-logs/
+# Build
+dist/
+build/
 *.log
 
-# Build output
-build/
-dist/
+# Screenshots
+data_collector/screenshots/
 
-# AWS credentials
-.aws/
-credentials
+

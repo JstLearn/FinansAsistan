@@ -1,1 +1,2 @@
-module.exports = null; // placeholder
+// back/models/Istek.js
+

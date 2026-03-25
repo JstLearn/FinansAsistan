@@ -1,2 +1,2 @@
-module.exports = null;
-// placeholder
+// back/models/Hatirlatma.js
+
