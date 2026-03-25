@@ -1,0 +1,87 @@
+# ════════════════════════════════════════════════════════════
+# Promtail Configuration
+# ════════════════════════════════════════════════════════════
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Docker container logs
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: status
+            values: ["running"]
+    relabel_configs:
+      # Extract container name
+      - source_labels: [__meta_docker_container_name]
+        regex: '/(.*)'
+        target_label: container
+      
+      # Extract container ID
+      - source_labels: [__meta_docker_container_id]
+        target_label: container_id
+      
+      # Extract service name from Docker Compose labels
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        target_label: service
+      
+      # Extract project name
+      - source_labels: [__meta_docker_container_label_com_docker_compose_project]
+        target_label: project
+      
+      # Set job name
+      - target_label: job
+        replacement: docker-logs
+      
+      # Set log path (Docker JSON log format)
+      - source_labels: [__meta_docker_container_id]
+        regex: (.+)
+        target_label: __path__
+        replacement: /var/lib/docker/containers/${1}/*-json.log
+      
+      # Add environment label
+      - target_label: environment
+        replacement: development
+      
+      # Add cluster label
+      - target_label: cluster
+        replacement: finans-asistan
+
+    pipeline_stages:
+      # Parse JSON log format from Docker
+      - json:
+          expressions:
+            output: log
+            stream: stream
+            attrs: attrs
+            tag: tag
+      
+      # Extract timestamp if available
+      - json:
+          expressions:
+            time: time
+          source: attrs
+      
+      # Extract log level if available
+      - regex:
+          expression: '(?P<level>ERROR|WARN|INFO|DEBUG|TRACE|error|warn|info|debug)'
+          source: output
+      
+      # Set log level label
+      - labels:
+          level:
+      
+      # Output the log line
+      - output:
+          source: output
+
