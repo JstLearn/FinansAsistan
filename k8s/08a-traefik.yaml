@@ -1,0 +1,174 @@
+# ============================================================
+# FinansAsistan - Traefik Ingress Controller
+# LoadBalancer service for External-DNS integration
+# ============================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: traefik-system
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: traefik
+  namespace: traefik-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: traefik
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - endpoints
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  - ingressclasses
+  verbs:
+  - get
+  - list
+  - watch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: traefik
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: traefik
+subjects:
+- kind: ServiceAccount
+  name: traefik
+  namespace: traefik-system
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+  namespace: traefik-system
+  labels:
+    app: traefik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+    spec:
+      serviceAccountName: traefik
+      containers:
+      - name: traefik
+        image: traefik:v3.0
+        args:
+        - --api.insecure=true
+        - --api.dashboard=true
+        - --entrypoints.web.address=:80
+        - --entrypoints.websecure.address=:443
+        - --providers.kubernetesingress=true
+        - --providers.kubernetesingress.ingressclass=traefik
+        # ACME via Cloudflare DNS-01 (proxy açıkken de çalışır)
+        - --certificatesresolvers.letsencrypt.acme.dnschallenge=true
+        - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
+        - --certificatesresolvers.letsencrypt.acme.email=admin@finansasistan.com
+        - --certificatesresolvers.letsencrypt.acme.storage=/data/acme.json
+        env:
+        # Cloudflare API token secret: cloudflare-api-token
+        # Traefik/lego kabul ettiği token env değişkenleri:
+        # - CF_API_TOKEN (önerilen)
+        # - CF_DNS_API_TOKEN (uyumluluk için)
+        - name: CF_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: cloudflare-api-token
+              key: CF_API_TOKEN
+        - name: CF_DNS_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: cloudflare-api-token
+              key: CF_DNS_API_TOKEN
+        ports:
+        - name: web
+          containerPort: 80
+        - name: websecure
+          containerPort: 443
+        - name: admin
+          containerPort: 8080
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: traefik-acme-pvc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: traefik-acme-pvc
+  namespace: traefik-system
+  labels:
+    app: traefik
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: hostpath
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik
+  namespace: traefik-system
+  annotations:
+    # External-DNS will use this annotation to create DNS records
+    external-dns.alpha.kubernetes.io/hostname: finansasistan.com,www.finansasistan.com,api.finansasistan.com,app.finansasistan.com
+    external-dns.alpha.kubernetes.io/ttl: "300"
+spec:
+  type: LoadBalancer
+  clusterIP: 10.96.72.134  # Sabit ClusterIP - Kubernetes yeniden başlatılsa bile değişmez
+  selector:
+    app: traefik
+  ports:
+  - name: web
+    port: 80
+    targetPort: 80
+    protocol: TCP
+  - name: websecure
+    port: 443
+    targetPort: 443
+    protocol: TCP
+  - name: admin
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: traefik
+spec:
+  controller: traefik.io/ingress-controller
+

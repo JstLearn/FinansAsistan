@@ -1,0 +1,271 @@
+# ============================================================
+# FinansAsistan - Monitoring Services HPA
+# Auto-scaling for Prometheus, AlertManager, Grafana, and Exporters
+# ============================================================
+
+---
+# ============================================================
+# AlertManager HPA (Deployment)
+# Auto-scaling for AlertManager (leader node only)
+# ============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: alertmanager-hpa
+  namespace: finans-asistan
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: alertmanager
+  minReplicas: 1  # Will be updated dynamically based on worker node count (ensures at least 1 pod on leader node)
+  maxReplicas: 100  # Distributed service - HPA creates new pods when limits approached (runs on leader + worker nodes)
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 90  # CPU target - more aggressive scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Optimal scaling target (limit'e yaklaşmadan önce yeni pod)
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 180
+      selectPolicy: Min
+
+---
+# ============================================================
+# Grafana HPA (Deployment)
+# Auto-scaling for Grafana (leader node only)
+# ============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: grafana-hpa
+  namespace: finans-asistan
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: grafana
+  minReplicas: 1  # Will be updated dynamically based on worker node count (ensures at least 1 pod on leader node)
+  maxReplicas: 100  # Distributed service - HPA creates new pods when limits approached (runs on leader + worker nodes)
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 90  # CPU target - more aggressive scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Optimal scaling target (limit'e yaklaşmadan önce yeni pod)
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 180
+      selectPolicy: Min
+
+---
+# ============================================================
+# PostgreSQL Exporter HPA (Deployment)
+# Auto-scaling for PostgreSQL Exporter (leader node only)
+# ============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: postgres-exporter-hpa
+  namespace: finans-asistan
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: postgres-exporter
+  minReplicas: 1  # Will be updated dynamically based on worker node count (ensures at least 1 pod on leader node)
+  maxReplicas: 100  # Distributed service - HPA creates new pods when limits approached (runs on leader + worker nodes)
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 90  # CPU target - more aggressive scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Optimal scaling target (limit'e yaklaşmadan önce yeni pod)
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 180
+      selectPolicy: Min
+
+---
+# ============================================================
+# Redis Exporter HPA (Deployment)
+# Auto-scaling for Redis Exporter (leader node only)
+# ============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: redis-exporter-hpa
+  namespace: finans-asistan
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: redis-exporter
+  minReplicas: 1  # Will be updated dynamically based on worker node count (ensures at least 1 pod on leader node)
+  maxReplicas: 100  # Distributed service - HPA creates new pods when limits approached (runs on leader + worker nodes)
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 90  # CPU target - more aggressive scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Optimal scaling target (limit'e yaklaşmadan önce yeni pod)
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 180
+      selectPolicy: Min
+
+---
+# ============================================================
+# Kafka Exporter HPA (Deployment)
+# Auto-scaling for Kafka Exporter - DISABLED
+# Kafka exporter is a metrics exporter, not a distributed service
+# It should run as a single pod (no HPA needed)
+# HPA is disabled - kafka-exporter deployment uses fixed replicas: 1
+# ============================================================
+# DISABLED: Kafka exporter does not need HPA - it's just a metrics exporter
+# No HPA definition needed - deployment uses fixed replicas: 1
+
+---
+# ============================================================
+# Cluster Autoscaler HPA (Deployment)
+# Auto-scaling for Cluster Autoscaler (distributed)
+# ============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cluster-autoscaler-hpa
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cluster-autoscaler
+  minReplicas: 1  # Leader node service - only 1 pod, VPA scales vertically
+  maxReplicas: 1  # Pod count stays 1, VPA will scale pod resources
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 90  # CPU target - more aggressive scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Optimal scaling target (limit'e yaklaşmadan önce yeni pod)
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 180
+      selectPolicy: Min
+

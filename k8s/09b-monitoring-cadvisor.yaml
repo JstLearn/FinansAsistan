@@ -1,0 +1,126 @@
+# ============================================================
+# FinansAsistan - cAdvisor (Container Advisor)
+# Analyzes resource usage and performance characteristics of containers
+# ============================================================
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cadvisor
+  namespace: finans-asistan
+  labels:
+    app: cadvisor
+spec:
+  selector:
+    matchLabels:
+      app: cadvisor
+  template:
+    metadata:
+      labels:
+        app: cadvisor
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: cadvisor
+        image: gcr.io/cadvisor/cadvisor:v0.47.0
+        command: ["/bin/sh", "-c"]
+        args:
+          - >-
+            /usr/bin/cadvisor
+            --housekeeping_interval=30s
+            --max_housekeeping_interval=60s
+            --containerd=/run/containerd/containerd.sock
+            --docker=unix:///dev/null
+            --store_container_labels=false
+            --disable_metrics=disk,tcp,udp,percpu,sched,process,referenced_memory,cpu_topology,resctrl,advtcp
+            2>&1 | grep -vE "failed to identify|Failed to create existing container"
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 512Mi
+            cpu: 500m
+        volumeMounts:
+        - name: rootfs
+          mountPath: /rootfs
+          readOnly: true
+        - name: var-run
+          mountPath: /var/run
+          readOnly: true
+        - name: sys
+          mountPath: /sys
+          readOnly: true
+        - name: disk
+          mountPath: /dev/disk
+          readOnly: true
+        # K3s/Containerd mounts
+        - name: containerd
+          mountPath: /var/lib/containerd
+          readOnly: true
+        - name: containerd-sock
+          mountPath: /run/containerd/containerd.sock
+          readOnly: true
+        # Hide Docker from cAdvisor to prevent layerdb errors
+        - name: hide-docker
+          mountPath: /var/lib/docker
+          readOnly: true
+        # Hide layerdb explicitly by masking the path under rootfs
+        - name: hide-docker-rootfs
+          mountPath: /rootfs/var/lib/docker
+          readOnly: true
+        # Hide Docker socket
+        - name: hide-docker-sock
+          mountPath: /var/run/docker.sock
+          readOnly: true
+        ports:
+          - name: http
+            containerPort: 8080
+            protocol: TCP
+        securityContext:
+          privileged: true
+          runAsUser: 0
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: rootfs
+        hostPath:
+          path: /
+      - name: var-run
+        hostPath:
+          path: /var/run
+      - name: sys
+        hostPath:
+          path: /sys
+      - name: disk
+        hostPath:
+          path: /dev/disk
+      # K3s/Containerd volumes
+      - name: containerd
+        hostPath:
+          path: /var/lib/containerd
+      - name: containerd-sock
+        hostPath:
+          path: /run/containerd/containerd.sock
+      # MASK DOCKER PATHS
+      - name: hide-docker
+        emptyDir: {}
+      - name: hide-docker-rootfs
+        emptyDir: {}
+      - name: hide-docker-sock
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cadvisor
+  namespace: finans-asistan
+  labels:
+    app: cadvisor
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  selector:
+    app: cadvisor

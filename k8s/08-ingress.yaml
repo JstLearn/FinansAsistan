@@ -1,0 +1,76 @@
+# ============================================================
+# FinansAsistan - Ingress (Traefik)
+# HTTP/HTTPS routing
+# ============================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: finans-asistan-ingress
+  namespace: finans-asistan
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+    # ArgoCD: Skip health check for Ingress to prevent sync hanging
+    argocd.argoproj.io/health.lua: |
+      hs = {}
+      hs.status = "Healthy"
+      hs.message = "Ingress health check skipped"
+      return hs
+spec:
+  ingressClassName: traefik
+  tls:
+  # Wildcard certificate for all subdomains (DNS-01 challenge)
+  - hosts:
+    - "*.finansasistan.com"
+    - finansasistan.com
+    secretName: letsencrypt-wildcard-tls
+  # Individual certificates for specific domains (backup/fallback)
+  - hosts:
+    - finansasistan.com
+    - www.finansasistan.com
+    - api.finansasistan.com
+    - app.finansasistan.com
+    secretName: letsencrypt-tls
+  rules:
+  - host: api.finansasistan.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 5000
+  - host: app.finansasistan.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 80
+  - host: www.finansasistan.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 80
+  - host: finansasistan.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 80
+

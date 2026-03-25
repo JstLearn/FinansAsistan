@@ -1,0 +1,106 @@
+# ============================================================
+# FinansAsistan - Redis Deployment
+# Redis 7 Alpine with persistence
+# ============================================================
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: finans-asistan
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: hostpath
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: finans-asistan
+spec:
+  replicas: 1  # Will be scaled by HPA based on node count (min 1 pod per node)
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      # Schedule Redis only on leader node (physical or EC2)
+      # HPA cannot scale this service - must stay on leader node only
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: leader
+                operator: In
+                values:
+                - "true"
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        env:
+        - name: IMAGE_DIGEST
+          value: "latest"
+        command:
+        - redis-server
+        - --appendonly
+        - "yes"
+        - --maxmemory
+        - "256mb"
+        - --maxmemory-policy
+        - "allkeys-lru"
+        ports:
+        - containerPort: 6379
+          name: redis
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        resources:
+          requests:
+            memory: "64Mi"   # Minimum request - start small, scale with HPA
+            cpu: "50m"       # Minimum request - start small, scale with HPA
+          limits:
+            memory: "2Gi"    # R6G Large: 16GB RAM, ~14.4GB usable, Redis gets 2GB
+            cpu: "500m"       # Limit = request * 10 (50m * 10)
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: finans-asistan
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+    name: redis
+

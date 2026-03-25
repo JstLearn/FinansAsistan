@@ -1,0 +1,145 @@
+# ============================================================
+# FinansAsistan - Horizontal Pod Autoscaler
+# Auto-scaling for backend, frontend, event-processor, and leader node services
+# ============================================================
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-hpa
+  namespace: finans-asistan
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 1  # Will be updated dynamically based on worker node count (ensures at least 1 pod on leader node)
+  maxReplicas: 100  # Distributed service - HPA creates new pods when limits approached (runs on leader + worker nodes)
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 90  # CPU target - more aggressive scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Memory target (limit'e yaklaşmadan önce yeni pod)
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 10
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+      selectPolicy: Min
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: finans-asistan
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend
+  minReplicas: 1  # Will be updated dynamically based on worker node count (ensures at least 1 pod on leader node)
+  maxReplicas: 100  # Distributed service - HPA creates new pods when limits approached (runs on leader + worker nodes)
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 90  # CPU target - more aggressive scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Memory target (limit'e yaklaşmadan önce yeni pod)
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+      selectPolicy: Min
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: event-processor-hpa
+  namespace: finans-asistan
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: event-processor
+  minReplicas: 1  # Will be updated dynamically based on worker node count (ensures at least 1 pod on leader node)
+  maxReplicas: 100  # Distributed service - HPA creates new pods when limits approached (runs on leader + worker nodes)
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 95  # Higher CPU target - scale up only when really needed
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 90  # Higher memory target - scale up only when really needed
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 120  # Wait 2 minutes before scaling up
+      policies:
+      - type: Percent
+        value: 25  # Max 25% increase per period
+        periodSeconds: 60
+      - type: Pods
+        value: 1  # Max 1 pod per period
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 30  # Very fast scale-down (30 seconds)
+      policies:
+      - type: Percent
+        value: 75  # Very aggressive scale-down - remove up to 75% of pods
+        periodSeconds: 30
+      - type: Pods
+        value: 5  # Allow removing up to 5 pods per period
+        periodSeconds: 30
+      selectPolicy: Max  # Most aggressive scale-down policy
+
