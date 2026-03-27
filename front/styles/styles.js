@@ -40,14 +40,12 @@ const styles = StyleSheet.create({
     scrollBehavior: 'smooth',
     scrollSnapType: 'y mandatory',
     '&::-webkit-scrollbar': {
-      width: '8px',
+      display: 'none',
     },
-    '&::-webkit-scrollbar-track': {
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    },
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
     '&::-webkit-scrollbar-thumb': {
-      backgroundColor: 'rgba(255, 255, 255, 0.2)',
-      borderRadius: '4px',
+      display: 'none',
     },
   },
   scrollViewContent: {
