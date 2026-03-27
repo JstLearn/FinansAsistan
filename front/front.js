@@ -1529,10 +1529,7 @@ const AppContent = () => {
           styles.scrollViewContent,
           {
             paddingHorizontal: '5%',
-            paddingVertical: '5%',
-            flexGrow: 1,
-            justifyContent: 'center',
-            alignItems: 'center'
+            paddingVertical: '5%'
           }
         ]}
         showsVerticalScrollIndicator={false}
