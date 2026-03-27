@@ -1528,15 +1528,14 @@ const AppContent = () => {
         contentContainerStyle={[
           styles.scrollViewContent,
           {
-            paddingHorizontal: '5%',
-            paddingVertical: '5%',
-            flexGrow: 1,
-            justifyContent: 'center',
-            alignItems: 'center'
+            paddingLeft: '5%',
+            paddingRight: '5%',
+            paddingTop: '5%',
+            paddingBottom: '5%'
           }
         ]}
-        showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
+        showsHorizontalScrollIndicator={true}
       >
         <Header onReset={handleLogoClick} />
 
