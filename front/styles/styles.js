@@ -58,7 +58,6 @@ const styles = StyleSheet.create({
     margin: 0,
     overflowY: 'auto',
   },
-  },
   heroTitle: {
     ...textStyles.primary,
     fontSize: 'clamp(16px, 3vw, 42px)',
