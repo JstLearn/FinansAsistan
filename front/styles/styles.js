@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'rgba(26, 31, 37, 0.25)',
-    minHeight: '100%',
+    minHeight: '100dvh',
     width: '100%',
     display: 'flex',
     flexDirection: 'column',
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: 'rgba(26, 31, 37, 0.5)',
     width: '100%',
-    minHeight: '100vh',
+    minHeight: '100dvh',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'flex-start',
