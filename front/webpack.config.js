@@ -67,13 +67,34 @@ module.exports = (env, argv) => {
       new CopyWebpackPlugin({
         patterns: [
           {
-            from: path.resolve(__dirname, 'public', 'favicon.png'),
-            to: path.resolve(__dirname, 'dist', 'favicon.png'),
+            from: path.resolve(__dirname, 'public', '*.png'),
+            to: path.resolve(__dirname, 'dist', '[name][ext]'),
+            noErrorOnMissing: true,
+          },
+          {
+            from: path.resolve(__dirname, 'public', '*.svg'),
+            to: path.resolve(__dirname, 'dist', '[name][ext]'),
             noErrorOnMissing: true,
           },
           {
             from: path.resolve(__dirname, 'cursorGlow.js'),
             to: path.resolve(__dirname, 'dist', 'cursorGlow.js'),
+            noErrorOnMissing: true,
+          },
+          // Fluid simulation files
+          {
+            from: path.resolve(__dirname, 'fluid-sim.js'),
+            to: path.resolve(__dirname, 'dist', 'fluid-sim.js'),
+            noErrorOnMissing: true,
+          },
+          {
+            from: path.resolve(__dirname, 'dat.gui.min.js'),
+            to: path.resolve(__dirname, 'dist', 'dat.gui.min.js'),
+            noErrorOnMissing: true,
+          },
+          {
+            from: path.resolve(__dirname, 'LDR_LLL1_0.png'),
+            to: path.resolve(__dirname, 'dist', 'LDR_LLL1_0.png'),
             noErrorOnMissing: true,
           },
         ],
@@ -91,7 +112,7 @@ module.exports = (env, argv) => {
       },
     },
     devServer: {
-      static: './dist',
+      static: './',
       hot: true,
       historyApiFallback: true,
       port: 9999,
