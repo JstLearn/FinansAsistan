@@ -1521,7 +1521,7 @@ const AppContent = () => {
   return (
     <View style={{ position: 'relative', flex: 1 }}>
       <FluidSimulation />
-      <SafeAreaView style={styles.container} pointerEvents="box-none">
+      <SafeAreaView style={[styles.container, { pointerEvents: 'box-none' }]}>
         <Logo onReset={handleLogoClick} />
       <UserInfo onLogout={resetAllStates} />
       <ScrollView

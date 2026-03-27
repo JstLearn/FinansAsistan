@@ -1110,7 +1110,6 @@ const styles = StyleSheet.create({
     marginTop: calcSize(4),
     backdropFilter: 'blur(12px)',
     pointerEvents: 'auto',
-    animation: 'dropdownOpen 0.2s ease-out',
   },
   filterDropdownItem: {
     paddingVertical: calcSize(6),
