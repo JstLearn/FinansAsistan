@@ -3,7 +3,7 @@ name: Upload Complete Project to S3
 on:
   push:
     branches:
-      - master  # Sadece master branch'ine push yapıldığında tetikle
+      - main  # Sadece main branch'ine push yapıldığında tetikle
   workflow_dispatch:  # Manuel tetikleme için
 
 # Environment variables will be loaded from GitHub Secrets

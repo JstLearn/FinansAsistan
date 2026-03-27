@@ -3,7 +3,7 @@ name: Build and Deploy Images
 on:
   push:
     branches:
-      - master  # Master branch'ine her push'ta tetikle (tüm image'ler build edilir)
+      - main  # Main branch'ine her push'ta tetikle (tüm image'ler build edilir)
   workflow_dispatch:
 
 # Environment variables will be loaded from GitHub Secrets
