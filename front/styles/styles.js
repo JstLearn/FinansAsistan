@@ -37,8 +37,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflowY: 'hidden',
     zIndex: 1,
-    scrollBehavior: 'smooth',
-    scrollSnapType: 'y mandatory',
     '&::-webkit-scrollbar': {
       display: 'none',
     },
@@ -46,20 +44,19 @@ const styles = StyleSheet.create({
     msOverflowStyle: 'none',
     '&::-webkit-scrollbar-thumb': {
       display: 'none',
+      borderRadius: '4px',
     },
   },
   scrollViewContent: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: 'rgba(26, 31, 37, 0.5)',
     width: '100%',
+    minHeight: '100vh',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'flex-start',
-    alignItems: 'stretch',
-    height: '100%',
+    alignItems: 'center',
     margin: 0,
-    overflowY: 'auto',
-  },
   },
   heroTitle: {
     ...textStyles.primary,
