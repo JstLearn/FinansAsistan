@@ -5,8 +5,6 @@ const FluidSimulation = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    console.log('[Fluid] Initializing...');
-
     let lastX = 0, lastY = 0;
     let initialized = false;
 
@@ -15,12 +13,10 @@ const FluidSimulation = () => {
 
       const canvas = document.getElementById('fluid-canvas');
       if (!canvas) {
-        console.log('[Fluid] Canvas not found');
         return;
       }
 
       initialized = true;
-      console.log('[Fluid] Ready');
     };
 
     const handleMouseMove = (e) => {
