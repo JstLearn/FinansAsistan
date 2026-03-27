@@ -31,7 +31,7 @@ const AlertModal = ({ visible, title, message, onClose, success }) => {
       return {
         transform: [{ translateY: -1 }, { scale: 0.98 }],
         boxShadow: '0 5px 15px rgba(0,0,0,0.4), inset 0 3px 10px rgba(0,37,87,0.6)',
-        background: 'linear-gradient(145deg, #003d82 0%, #002557 50%, #001a3d 100%)',
+        backgroundColor: '#003d82',
         border: 'clamp(2px, 0.3vw, 3px) solid #002557',
         borderRadius: 'clamp(10px, 2.5vw, 25px)',
         overflow: 'hidden',
@@ -44,7 +44,7 @@ const AlertModal = ({ visible, title, message, onClose, success }) => {
                     0 8px 18px rgba(0,0,0,0.3), 
                     0 0 25px rgba(0,123,255,0.2),
                     inset 0 2px 8px rgba(0,86,179,0.25)`,
-        background: 'linear-gradient(145deg, #007bff 0%, #0056b3 50%, #003d82 100%)',
+        backgroundColor: '#007bff',
         border: 'clamp(2px, 0.3vw, 3px) solid #0056b3',
         borderRadius: 'clamp(10px, 2.5vw, 25px)',
         overflow: 'hidden',
@@ -146,7 +146,7 @@ const AlertModal = ({ visible, title, message, onClose, success }) => {
             onMouseLeave={() => setIsButtonHovered(false)}
             activeOpacity={0.8}
             style={[{
-              background: 'linear-gradient(145deg, #4da3ff 0%, #007bff 45%, #0056b3 75%, #003d82 100%)',
+              backgroundColor: '#007bff',
               padding: 16,
               borderRadius: 15,
               alignItems: 'center',

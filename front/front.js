@@ -13,6 +13,7 @@ import AlertModal from './components/Modal/AlertModal';
 import LoginModal from './components/LoginModal';
 import { UserProvider, useUser } from './context/UserContext';
 import Logo from './components/Logo';
+import FluidSimulation from './components/FluidSimulation';
 
 const AppContent = () => {
   // State tanımlamaları
@@ -1518,8 +1519,10 @@ const AppContent = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Logo onReset={handleLogoClick} />
+    <View style={{ position: 'relative', flex: 1 }}>
+      <FluidSimulation />
+      <SafeAreaView style={styles.container} pointerEvents="box-none">
+        <Logo onReset={handleLogoClick} />
       <UserInfo onLogout={resetAllStates} />
       <ScrollView
         contentContainerStyle={[
@@ -1717,6 +1720,7 @@ const AppContent = () => {
         onSuccess={handleModalSuccess}
       />
     </SafeAreaView>
+    </View>
   );
 };
 

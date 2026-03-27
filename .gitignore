@@ -51,4 +51,8 @@ build/
 # Screenshots
 data_collector/screenshots/
 
+# Local development data (database, etc.)
+data/
 
+
+.gitnexus

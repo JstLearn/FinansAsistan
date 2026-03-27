@@ -1,0 +1,17 @@
+# ════════════════════════════════════════════════════════════
+# FinansAsistan Backend - Development Dockerfile
+# Root kullanıcı ile çalışır (bind mount için gerekli)
+# ════════════════════════════════════════════════════════════
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Development araçları
+RUN apk add --no-cache git
+
+# Port
+EXPOSE 5000
+
+# CMD sonradan override edilecek (docker-compose'da tanımlı)
+CMD ["npm", "run", "dev"]

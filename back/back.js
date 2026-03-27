@@ -122,15 +122,20 @@ module.exports = app;
 // Only start server if not in test environment
 if (process.env.NODE_ENV !== 'test') {
   // Initialize Kafka producer connection (non-blocking)
-  (async () => {
-    try {
-      await connectKafka();
-      console.log('✅ Kafka producer connected');
-    } catch (error) {
-      console.error('⚠️  Kafka connection failed (non-critical):', error.message);
-      // Kafka bağlantısı başarısız olsa bile server başlasın
-    }
-  })();
+  // Skip Kafka connection if KAFKA_ENABLED is explicitly set to 'false'
+  if (process.env.KAFKA_ENABLED !== 'false') {
+    (async () => {
+      try {
+        await connectKafka();
+        console.log('✅ Kafka producer connected');
+      } catch (error) {
+        console.error('⚠️  Kafka connection failed (non-critical):', error.message);
+        // Kafka bağlantısı başarısız olsa bile server başlasın
+      }
+    })();
+  } else {
+    console.log('ℹ️  Kafka disabled - skipping connection');
+  }
 
   app.listen(PORT, HOST, () => {
     console.log(`\n✅ Sunucu başlatıldı!`);

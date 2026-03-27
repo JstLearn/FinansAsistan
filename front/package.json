@@ -3,15 +3,16 @@
   "version": "1.0.0",
   "main": "index.web.js",
   "scripts": {
-    "web": "webpack serve --mode development --open",
-    "start": "webpack serve --mode development --open",
-    "build": "webpack --mode production"
+    "web": "webpack serve --mode development --open --config webpack.config.js",
+    "start": "webpack serve --mode development --open --config webpack.config.js",
+    "build": "webpack --mode production --config webpack.config.js"
   },
   "dependencies": {
     "@react-native-community/datetimepicker": "^8.2.0",
     "axios": "^1.7.9",
     "js-yaml": "^4.1.1",
     "path": "^0.12.7",
+    "playwright": "^1.58.2",
     "react": "^19.2.1",
     "react-datepicker": "^9.0.0",
     "react-dom": "^19.2.1",
@@ -37,5 +38,9 @@
     "webpack": "^5.97.1",
     "webpack-cli": "^6.0.1",
     "webpack-dev-server": "^5.2.0"
-  }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
 }

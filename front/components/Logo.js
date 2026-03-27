@@ -60,7 +60,7 @@ const Logo = ({ onReset }) => {
 
 const styles = StyleSheet.create({
     container: {
-        background: 'linear-gradient(135deg, rgba(0, 123, 255, 0.2) 0%, rgba(0, 123, 255, 0.1) 100%)',
+        backgroundColor: 'rgba(0, 123, 255, 0.2)',
         padding: 'clamp(3px, 0.6vw, 6px)',
         borderRadius: 'clamp(12px, 2.5vw, 25px)',
         position: 'fixed',
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
         '&:hover': {
             transform: 'translateY(-4px) scale(1.1) rotate(5deg)',
             boxShadow: '0 12px 35px rgba(0,123,255,0.5), 0 4px 15px rgba(0,0,0,0.3), 0 0 25px rgba(0,123,255,0.4)',
-            background: 'linear-gradient(135deg, rgba(0, 123, 255, 0.3) 0%, rgba(0, 123, 255, 0.15) 100%)',
+            backgroundColor: 'rgba(0, 123, 255, 0.3)',
         },
         '&:active': {
             transform: 'translateY(-2px) scale(1.05)',

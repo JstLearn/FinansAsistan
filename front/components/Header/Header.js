@@ -7,25 +7,7 @@ const Header = ({ onReset }) => {
   const [isHovered, setIsHovered] = useState(false);
   const HEADER_VERSION = 'v2.3';
 
-  // #region agent log
-  useEffect(() => {
-    const logData = {
-      location: 'Header.js:componentDidMount',
-      message: 'Header component rendered',
-      data: { version: HEADER_VERSION, timestamp: Date.now() },
-      timestamp: Date.now(),
-      sessionId: 'debug-session',
-      runId: 'run1',
-      hypothesisId: 'A'
-    };
-    fetch('http://127.0.0.1:7242/ingest/dcb88ded-e5da-4f34-9b51-07ad925c2c3e', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(logData)
-    }).catch(() => { });
-    console.error('[Header] Component rendered', { version: HEADER_VERSION, timestamp: new Date().toISOString() });
-  }, []);
-  // #endregion
+  // Agent logging disabled
 
   const handleTitlePress = () => {
     if (onReset) {

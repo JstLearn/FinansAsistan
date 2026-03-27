@@ -220,7 +220,7 @@ const DynamicForm = ({
           isSubmitPressed ? {
             transform: [{ translateY: -2 }, { scale: 0.98 }],
             boxShadow: '0 6px 18px rgba(0,0,0,0.4), inset 0 4px 10px rgba(21,87,36,0.6)',
-            background: 'linear-gradient(145deg, #1e7e34 0%, #155724 50%, #0f3d18 100%)',
+            backgroundColor: '#1e7e34',
             border: 'clamp(2px, 0.3vw, 3px) solid #155724',
             borderRadius: 'clamp(10px, 2.5vw, 25px)',
             overflow: 'hidden',
@@ -230,7 +230,7 @@ const DynamicForm = ({
                         0 10px 22px rgba(0,0,0,0.3), 
                         0 0 35px rgba(40,167,69,0.2),
                         inset 0 2px 8px rgba(30,126,52,0.3)`,
-            background: 'linear-gradient(145deg, #28a745 0%, #1e7e34 50%, #155724 100%)',
+            backgroundColor: '#28a745',
             border: 'clamp(2px, 0.3vw, 3px) solid #1e7e34',
             borderRadius: 'clamp(10px, 2.5vw, 25px)',
             overflow: 'hidden',

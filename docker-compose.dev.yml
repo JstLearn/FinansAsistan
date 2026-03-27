@@ -1,6 +1,6 @@
 # ════════════════════════════════════════════════════════════
 # FinansAsistan - Development Docker Compose
-# Application Stack (Postgres, Kafka, Redis, Backend, Frontend)
+# Application Stack (Postgres, Backend, Frontend)
 # ════════════════════════════════════════════════════════════
 
 services:
@@ -18,7 +18,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data_dev:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
       - ./bootstrap/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1"]
@@ -31,69 +31,12 @@ services:
       - finans-network
 
   # ──────────────────────────────────────────────────────────
-  # Kafka (Message Queue) - KRaft Mode (No Zookeeper)
-  # ──────────────────────────────────────────────────────────
-  kafka:
-    image: apache/kafka:3.7.0
-    container_name: finans-kafka-dev
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9094
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_LOG_RETENTION_HOURS: 168
-      KAFKA_LOG_SEGMENT_BYTES: 1073741824
-      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
-    ports:
-      - "9092:9092"
-      - "9094:9094"
-    volumes:
-      - kafka_data_dev:/var/lib/kafka/data
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      start_period: 60s
-      retries: 10
-    restart: unless-stopped
-    networks:
-      - finans-network
-
-  # ──────────────────────────────────────────────────────────
-  # Redis (Cache & Session Store)
-  # ──────────────────────────────────────────────────────────
-  redis:
-    image: redis:7-alpine
-    container_name: finans-redis-dev
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data_dev:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - finans-network
-
-  # ──────────────────────────────────────────────────────────
   # Backend API (Node.js + Express)
   # ──────────────────────────────────────────────────────────
   backend:
     build:
       context: ./back
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: finans-backend-dev
     ports:
       - "5000:5000"
@@ -123,15 +66,9 @@ services:
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}
       SMTP_SSL: ${SMTP_SSL}
-      KAFKA_BROKERS: kafka:9092
-      KAFKA_CLIENT_ID: finans-backend-dev
-      REDIS_URL: redis://redis:6379
+      KAFKA_ENABLED: "false"
     depends_on:
       postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
@@ -179,14 +116,3 @@ networks:
   finans-network:
     name: finans-network
     driver: bridge
-
-# ══════════════════════════════════════════════════════════════
-# Volumes
-# ══════════════════════════════════════════════════════════════
-volumes:
-  postgres_data_dev:
-    name: finans-postgres-data-dev
-  kafka_data_dev:
-    name: finans-kafka-data-dev
-  redis_data_dev:
-    name: finans-redis-data-dev

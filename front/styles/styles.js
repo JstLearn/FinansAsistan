@@ -29,7 +29,7 @@ const textStyles = {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1f25',
+    backgroundColor: 'rgba(26, 31, 37, 0.25)',
     minHeight: '100vh',
     width: '100%',
     display: 'flex',
@@ -43,16 +43,16 @@ const styles = StyleSheet.create({
       width: '8px',
     },
     '&::-webkit-scrollbar-track': {
-      background: 'rgba(255, 255, 255, 0.1)',
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
     },
     '&::-webkit-scrollbar-thumb': {
-      background: 'rgba(255, 255, 255, 0.2)',
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
       borderRadius: '4px',
     },
   },
   scrollViewContent: {
     flex: 1,
-    backgroundColor: '#1a1f25',
+    backgroundColor: 'rgba(26, 31, 37, 0.5)',
     width: '100%',
     display: 'flex',
     flexDirection: 'column',
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     marginBottom: 'clamp(0.5vh, 1vw, 1vh)',
     marginTop: 'clamp(1vh, 2vw, 2vh)',
     textShadow: `0 clamp(2px, 0.4vw, 4px) clamp(6px, 1.2vw, 12px) rgba(0,123,255,0.3), 0 clamp(1px, 0.2vw, 2px) clamp(3px, 0.6vw, 6px) rgba(0,0,0,0.6), 0 0 clamp(10px, 2vw, 20px) rgba(0,123,255,0.15)`,
-    animation: 'glow 3s ease-in-out infinite alternate',
+    // animation removed - React Native Web doesn't support CSS animations
     lineHeight: 'clamp(20px, 3.5vw, 48px)',
     letterSpacing: 'clamp(0.1px, 0.02vw, 0.3px)',
   },
@@ -84,7 +84,6 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     marginBottom: 'clamp(1vh, 2vw, 2vh)',
     textShadow: `0 clamp(2px, 0.4vw, 4px) clamp(6px, 1.2vw, 12px) rgba(0,123,255,0.3), 0 clamp(1px, 0.2vw, 2px) clamp(3px, 0.6vw, 6px) rgba(0,0,0,0.6), 0 0 clamp(10px, 2vw, 20px) rgba(0,123,255,0.15)`,
-    animation: 'glow 3s ease-in-out infinite alternate',
     lineHeight: 'clamp(14px, 2.2vw, 22px)',
     paddingHorizontal: 'clamp(10px, 2vw, 20px)',
   },
@@ -130,7 +129,7 @@ const styles = StyleSheet.create({
     height: 'auto',
     maxHeight: 'clamp(25vh, 35vw, 35vh)',
     backgroundColor: '#007bff',
-    background: 'linear-gradient(145deg, #4da3ff 0%, #007bff 45%, #0056b3 75%, #003d82 100%)',
+    backgroundColor: '#007bff',
     borderRadius: 'clamp(12px, 2.5vw, 25px)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -156,12 +155,12 @@ const styles = StyleSheet.create({
     '&:hover': {
       transform: 'translateY(-8px) scale(1.05)',
       boxShadow: `0 ${calcSize(25)} ${calcSize(50)} rgba(0,123,255,0.6), 0 ${calcSize(10)} ${calcSize(25)} rgba(0,123,255,0.4), 0 0 ${calcSize(40)} rgba(0,123,255,0.3), inset 0 ${calcSize(-2)} ${calcSize(8)} rgba(0,0,0,0.2), inset 0 ${calcSize(2)} ${calcSize(8)} rgba(255,255,255,0.2)`,
-      background: 'linear-gradient(135deg, #0056b3 0%, #003d82 100%)',
+      backgroundColor: '#0056b3',
     },
     '&:active': {
       transform: 'translateY(-4px) scale(0.98)',
       boxShadow: `0 ${calcSize(8)} ${calcSize(20)} rgba(0,123,255,0.4), inset 0 ${calcSize(4)} ${calcSize(12)} rgba(0,0,0,0.3)`,
-      background: 'linear-gradient(135deg, #003d82 0%, #002557 100%)',
+      backgroundColor: '#003d82',
     },
   },
   mainButtonSmall: {
@@ -197,7 +196,7 @@ const styles = StyleSheet.create({
     lineHeight: 'clamp(14px, 1.8vw, 20px)',
   },
   glassCard: {
-    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 'clamp(12px, 2.5vw, 25px)',
     borderWidth: 'clamp(1px, 0.2vw, 2px)',
     borderColor: 'rgba(255, 255, 255, 0.25)',
@@ -244,7 +243,7 @@ const styles = StyleSheet.create({
   },
   subButton: {
     backgroundColor: '#6c757d',
-    background: 'linear-gradient(145deg, #8a9199 0%, #6c757d 45%, #495057 75%, #343a40 100%)',
+    backgroundColor: '#6c757d',
     padding: 'clamp(6px, 1.2vw, 12px)',
     borderRadius: 'clamp(10px, 2.5vw, 25px)',
     flex: 1,
@@ -271,12 +270,12 @@ const styles = StyleSheet.create({
     '&:hover': {
       transform: 'translateY(-5px) scale(1.03)',
       boxShadow: `0 ${calcSize(15)} ${calcSize(35)} rgba(108,117,125,0.5), 0 ${calcSize(5)} ${calcSize(15)} rgba(0,0,0,0.3), 0 0 ${calcSize(25)} rgba(108,117,125,0.3), inset 0 ${calcSize(-1)} ${calcSize(5)} rgba(0,0,0,0.2), inset 0 ${calcSize(1)} ${calcSize(5)} rgba(255,255,255,0.2)`,
-      background: 'linear-gradient(135deg, rgba(73, 80, 87, 1) 0%, rgba(52, 58, 64, 1) 100%)',
+      backgroundColor: 'rgba(52, 58, 64, 1)',
     },
     '&:active': {
       transform: 'translateY(-2px) scale(0.98)',
       boxShadow: `0 ${calcSize(5)} ${calcSize(15)} rgba(0,0,0,0.3), inset 0 ${calcSize(3)} ${calcSize(8)} rgba(0,0,0,0.3)`,
-      background: 'linear-gradient(135deg, rgba(52, 58, 64, 1) 0%, rgba(33, 37, 41, 1) 100%)',
+      backgroundColor: 'rgba(33, 37, 41, 1)',
     },
   },
   subButtonText: {
@@ -422,7 +421,7 @@ const styles = StyleSheet.create({
   checkboxButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.08) 100%)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: 'clamp(4px, 1vw, 10px)',
     padding: 'clamp(4px, 1vw, 10px)',
     height: 'clamp(28px, 4vw, 40px)',
@@ -436,7 +435,7 @@ const styles = StyleSheet.create({
     '&:hover': {
       transform: 'translateY(-2px)',
       boxShadow: `0 clamp(3px, 0.6vw, 6px) clamp(8px, 1.6vw, 16px) rgba(0,123,255,0.3), inset 0 clamp(0.5px, 0.1vw, 1px) clamp(1px, 0.2vw, 2px) rgba(255,255,255,0.15)`,
-      background: 'linear-gradient(135deg, rgba(0, 123, 255, 0.2) 0%, rgba(0, 123, 255, 0.1) 100%)',
+      backgroundColor: 'rgba(0, 123, 255, 0.2)',
     },
     '&:active': {
       transform: 'translateY(0px)',
@@ -488,17 +487,17 @@ const styles = StyleSheet.create({
       height: 8,
     },
     '&::-webkit-scrollbar-track': {
-      background: 'rgba(255, 255, 255, 0.05)',
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
       borderRadius: 4,
       marginLeft: '15px',
       marginRight: '15px',
     },
     '&::-webkit-scrollbar-thumb': {
-      background: 'rgba(0, 123, 255, 0.4)',
+      backgroundColor: 'rgba(0, 123, 255, 0.4)',
       borderRadius: 4,
     },
     '&::-webkit-scrollbar-thumb:hover': {
-      background: 'rgba(0, 123, 255, 0.6)',
+      backgroundColor: 'rgba(0, 123, 255, 0.6)',
     },
     '&::-webkit-scrollbar-button': {
       display: 'none',
@@ -542,9 +541,12 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: '15px',
     borderTopRightRadius: '15px',
     boxShadow: `0 ${calcSize(6)} ${calcSize(20)} rgba(0,0,0,0.2), inset 0 ${calcSize(1)} ${calcSize(2)} rgba(255,255,255,0.05)`,
-    borderTop: '1px solid rgba(255,255,255,0.1)',
-    borderLeft: '1px solid rgba(255,255,255,0.1)',
-    borderRight: '1px solid rgba(255,255,255,0.1)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(255,255,255,0.1)',
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(255,255,255,0.1)',
     boxSizing: 'border-box',
     '& > div': {
       '&:hover': {
@@ -623,9 +625,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     zIndex: 1,
-    borderBottom: '2px solid rgba(255,255,255,0.2)',
-    borderLeft: '2px solid rgba(255,255,255,0.2)',
-    borderRight: '2px solid rgba(255,255,255,0.2)',
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(255,255,255,0.2)',
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(255,255,255,0.2)',
+    borderRightWidth: 2,
+    borderRightColor: 'rgba(255,255,255,0.2)',
     boxShadow: `inset 0 ${calcSize(4)} ${calcSize(12)} rgba(0,0,0,0.15)`,
   },
   tableRow: {
@@ -639,7 +644,7 @@ const styles = StyleSheet.create({
     transition: 'all 0.2s ease',
     boxSizing: 'border-box',
     '&:hover': {
-      background: 'linear-gradient(90deg, rgba(0, 123, 255, 0.1) 0%, rgba(0, 123, 255, 0.05) 50%, rgba(0, 123, 255, 0.1) 100%)',
+      backgroundColor: 'rgba(0, 123, 255, 0.1)',
       boxShadow: `0 ${calcSize(3)} ${calcSize(12)} rgba(0,123,255,0.15), inset 0 0 ${calcSize(20)} rgba(0,123,255,0.06)`,
       transform: 'translateX(3px)',
       opacity: 1,
@@ -707,7 +712,7 @@ const styles = StyleSheet.create({
     textShadow: '0 1px 2px rgba(255,77,79,0.2)',
   },
   formSubmitButton: {
-    background: 'linear-gradient(145deg, #34ce57 0%, #28a745 45%, #1e7e34 75%, #155724 100%)',
+    backgroundColor: '#28a745',
     padding: 'clamp(8px, 1.6vw, 16px)',
     borderRadius: 'clamp(8px, 1.8vw, 18px)',
     alignSelf: 'center',
@@ -723,9 +728,8 @@ const styles = StyleSheet.create({
                 inset 0 clamp(1.5px, 0.3vw, 3px) clamp(5px, 1vw, 10px) rgba(52,206,87,0.35),
                 inset clamp(-1px, -0.2vw, -2px) 0 clamp(3px, 0.6vw, 6px) rgba(21,87,36,0.3),
                 inset clamp(1px, 0.2vw, 2px) 0 clamp(3px, 0.6vw, 6px) rgba(52,206,87,0.3)`,
-    border: 'clamp(1px, 0.3vw, 3px) solid rgba(52,206,87,0.3)',
-    borderTop: 'clamp(1px, 0.3vw, 3px) solid rgba(52,206,87,0.5)',
-    borderBottom: 'clamp(1px, 0.3vw, 3px) solid rgba(21,87,36,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(52,206,87,0.3)',
     minWidth: 'clamp(100px, 20vw, 200px)',
     paddingHorizontal: 'clamp(10px, 2vw, 24px)',
     maxWidth: '90%',
@@ -735,7 +739,7 @@ const styles = StyleSheet.create({
     '&:hover': {
       transform: 'translateY(-4px) scale(1.05)',
       boxShadow: `0 clamp(8px, 1.5vw, 15px) clamp(18px, 3.5vw, 35px) rgba(40,167,69,0.6), 0 clamp(2px, 0.5vw, 5px) clamp(8px, 1.5vw, 15px) rgba(0,0,0,0.3), 0 0 clamp(15px, 3vw, 30px) rgba(40,167,69,0.4)`,
-      background: 'linear-gradient(135deg, #1e7e34 0%, #155724 100%)',
+      backgroundColor: '#1e7e34',
     },
     '&:active': {
       transform: 'translateY(-2px) scale(0.98)',
@@ -853,7 +857,7 @@ const styles = StyleSheet.create({
   rowsPerPageOption: {
     padding: calcSize(6),
     borderRadius: 999,
-    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     cursor: 'pointer',
     transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
     height: calcSize(32),
@@ -864,7 +868,7 @@ const styles = StyleSheet.create({
     border: '2px solid rgba(255, 255, 255, 0.12)',
     boxShadow: `0 ${calcSize(3)} ${calcSize(8)} rgba(0,0,0,0.2), inset 0 ${calcSize(1)} ${calcSize(2)} rgba(255,255,255,0.08)`,
     '&:hover': {
-      background: 'linear-gradient(135deg, rgba(0, 123, 255, 0.2) 0%, rgba(0, 123, 255, 0.12) 100%)',
+      backgroundColor: 'rgba(0, 123, 255, 0.2)',
       transform: 'translateY(-3px) scale(1.08)',
       boxShadow: `0 ${calcSize(6)} ${calcSize(16)} rgba(0, 123, 255, 0.25), 0 0 ${calcSize(12)} rgba(0, 123, 255, 0.12)`,
     },
@@ -874,7 +878,7 @@ const styles = StyleSheet.create({
     },
   },
   rowsPerPageOptionActive: {
-    background: 'linear-gradient(135deg, rgba(0, 123, 255, 0.3) 0%, rgba(0, 123, 255, 0.2) 100%)',
+    backgroundColor: 'rgba(0, 123, 255, 0.3)',
     border: '2px solid rgba(0, 123, 255, 0.5)',
     boxShadow: `0 ${calcSize(6)} ${calcSize(16)} rgba(0, 123, 255, 0.3), 0 0 ${calcSize(20)} rgba(0, 123, 255, 0.15), inset 0 ${calcSize(1)} ${calcSize(2)} rgba(255,255,255,0.15)`,
     transform: 'translateY(-2px)',
@@ -899,7 +903,7 @@ const styles = StyleSheet.create({
   paginationButton: {
     padding: calcSize(6),
     borderRadius: 999,
-    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     cursor: 'pointer',
     transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
     height: calcSize(32),
@@ -910,7 +914,7 @@ const styles = StyleSheet.create({
     border: '2px solid rgba(255, 255, 255, 0.15)',
     boxShadow: `0 ${calcSize(4)} ${calcSize(10)} rgba(0,0,0,0.2), inset 0 ${calcSize(1)} ${calcSize(2)} rgba(255,255,255,0.1)`,
     '&:hover': {
-      background: 'linear-gradient(135deg, rgba(0, 123, 255, 0.25) 0%, rgba(0, 123, 255, 0.15) 100%)',
+      backgroundColor: 'rgba(0, 123, 255, 0.25)',
       transform: 'translateY(-3px) scale(1.1)',
       boxShadow: `0 ${calcSize(8)} ${calcSize(20)} rgba(0, 123, 255, 0.3), 0 0 ${calcSize(15)} rgba(0, 123, 255, 0.15)`,
     },
@@ -1134,9 +1138,11 @@ const styles = StyleSheet.create({
   },
   filterDropdownItemActive: {
     backgroundColor: 'rgba(0, 123, 255, 0.25)',
-    borderLeft: `${calcSize(3)} solid rgba(0,123,255,1)`,
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(0,123,255,1)',
     paddingLeft: calcSize(10),
-    border: '1px solid rgba(0, 123, 255, 0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 123, 255, 0.6)',
     boxShadow: `0 0 ${calcSize(12)} rgba(0,123,255,0.4), inset 0 0 ${calcSize(8)} rgba(0,123,255,0.1)`,
     fontWeight: '700',
   },

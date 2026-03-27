@@ -226,7 +226,7 @@ const UserInfo = ({ onLogout }) => {
             return {
                 transform: [{ translateY: 0 }, { scale: 1 }],
                 boxShadow: '0 3px 10px rgba(0,0,0,0.3), inset 0 3px 8px rgba(167,29,42,0.6)',
-                background: 'linear-gradient(145deg, #c82333 0%, #a71d2a 50%, #8b1824 100%)',
+                backgroundColor: '#a71d2a',
                 border: 'clamp(1.5px, 0.3vw, 3px) solid #a71d2a',
                 borderRadius: 'clamp(8px, 1.8vw, 18px)',
                 overflow: 'hidden',
@@ -235,7 +235,7 @@ const UserInfo = ({ onLogout }) => {
         if (isLogoutHovered) {
             return {
                 transform: [{ translateY: -3 }, { scale: 1.08 }],
-                background: 'linear-gradient(145deg, #ff3b30 0%, #dc3545 50%, #c82333 100%)',
+                backgroundColor: '#dc3545',
                 boxShadow: `0 10px 28px rgba(255,59,48,0.4), 
                             0 4px 14px rgba(0,0,0,0.3), 
                             0 0 20px rgba(255,59,48,0.2),
@@ -864,7 +864,7 @@ const UserInfo = ({ onLogout }) => {
 
 const styles = StyleSheet.create({
     container: {
-        background: 'linear-gradient(135deg, rgba(0, 123, 255, 0.15) 0%, rgba(0, 123, 255, 0.08) 100%)',
+        backgroundColor: 'rgba(0, 123, 255, 0.15)',
         padding: 'clamp(3px, 1vw, 10px)',
         paddingHorizontal: 'clamp(4px, 1.5vw, 18px)',
         borderRadius: 'clamp(8px, 2vw, 25px)',
@@ -896,19 +896,17 @@ const styles = StyleSheet.create({
         textOverflow: 'ellipsis',
         maxWidth: 'clamp(40px, 15vw, 150px)',
         cursor: 'pointer',
-        textDecoration: 'underline',
+        textDecorationLine: 'underline',
         textDecorationStyle: 'dotted'
     },
     logoutButton: {
-        background: 'linear-gradient(145deg, #ff6b5f 0%, #ff3b30 45%, #dc3545 75%, #c82333 100%)',
+        backgroundColor: '#ff3b30',
         paddingVertical: 'clamp(2px, 0.8vw, 8px)',
         paddingHorizontal: 'clamp(4px, 1.2vw, 14px)',
         borderRadius: 'clamp(6px, 1.5vw, 18px)',
-        borderWidth: 'clamp(1px, 0.3vw, 3px)',
+        borderWidth: 1,
         borderStyle: 'solid',
-        border: 'clamp(1px, 0.3vw, 3px) solid rgba(255,107,95,0.3)',
-        borderTop: 'clamp(1px, 0.3vw, 3px) solid rgba(255,107,95,0.5)',
-        borderBottom: 'clamp(1px, 0.3vw, 3px) solid rgba(200,35,51,0.5)',
+        borderColor: 'rgba(255,107,95,0.3)',
         transition: 'all 0.3s ease',
         boxShadow: `0 clamp(2px, 0.8vw, 8px) clamp(5px, 2vw, 20px) rgba(255,59,48,0.3), 
                     0 clamp(1px, 0.3vw, 3px) clamp(2px, 1vw, 10px) rgba(0,0,0,0.25), 
@@ -919,7 +917,7 @@ const styles = StyleSheet.create({
         cursor: 'pointer',
         '&:hover': {
             transform: 'translateY(-2px) scale(1.05)',
-            background: 'linear-gradient(135deg, rgba(255, 59, 48, 0.5) 0%, rgba(255, 59, 48, 0.3) 100%)',
+            backgroundColor: 'rgba(255, 59, 48, 0.5)',
             boxShadow: '0 6px 18px rgba(255,59,48,0.5), 0 0 15px rgba(255,59,48,0.3)',
         },
         '&:active': {
