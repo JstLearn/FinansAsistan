@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'rgba(26, 31, 37, 0.25)',
-    height: '100vh',
+    minHeight: '100%',
     width: '100%',
     display: 'flex',
     flexDirection: 'column',
