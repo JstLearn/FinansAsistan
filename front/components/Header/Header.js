@@ -5,9 +5,6 @@ import styles from '../../styles/styles';
 
 const Header = ({ onReset }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const HEADER_VERSION = 'v2.3';
-
-  // Agent logging disabled
 
   const handleTitlePress = () => {
     if (onReset) {
@@ -42,7 +39,7 @@ const Header = ({ onReset }) => {
         <Text style={styles.heroTitle}>FinansAsistan</Text>
       </TouchableOpacity>
       <Text style={styles.heroSubtitle}>
-        Varlığınızı ve Yokluğunuzu Modern Bir Şekilde Yönetin. ({HEADER_VERSION})
+        Varlığınızı ve Yokluğunuzu Modern Bir Şekilde Yönetin.
       </Text>
     </View>
   );
