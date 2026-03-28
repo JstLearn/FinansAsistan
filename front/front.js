@@ -11,6 +11,7 @@ import styles from './styles/styles';
 import { postData, fetchData } from './services/api';
 import AlertModal from './components/Modal/AlertModal';
 import LoginModal from './components/LoginModal';
+import YetkiModal from './components/YetkiModal';
 import { UserProvider, useUser } from './context/UserContext';
 import Logo from './components/Logo';
 import FluidSimulation from './components/FluidSimulation';
@@ -47,6 +48,7 @@ const AppContent = () => {
   const [isResetting, setIsResetting] = useState(false);
   const [formAnimationKey, setFormAnimationKey] = useState(0);
   const [tableAnimationKey, setTableAnimationKey] = useState(0);
+  const [isYetkiModalVisible, setYetkiModalVisible] = useState(false);
   const { user } = useUser();
 
   // Ana butonların işleyicileri
@@ -1536,8 +1538,12 @@ const AppContent = () => {
         zIndex: 10002,
       }}>
         <Logo onReset={handleLogoClick} />
-        <UserInfo onLogout={resetAllStates} />
+        <UserInfo onLogout={resetAllStates} onOpenYetkiModal={() => setYetkiModalVisible(true)} />
       </View>
+      <YetkiModal
+        visible={isYetkiModalVisible}
+        onClose={() => setYetkiModalVisible(false)}
+      />
       <SafeAreaView style={[styles.container, { pointerEvents: 'box-none' }]}>
       <ScrollView
         contentContainerStyle={[
