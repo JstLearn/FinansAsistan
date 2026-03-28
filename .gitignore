@@ -1,35 +1,12 @@
-# Terraform
-.terraform/
-*.tfstate
-*.tfstate.*
-.terraform.lock.hcl
-terraform.tfvars
-*.tfvars
-*.zip
-tfplan
-*.tfplan
-
-# Node modules
+# Dependencies
 node_modules/
 front/node_modules/
 back/node_modules/
 
-# Python virtual environment
-data_collector/venv/
-*.pyc
-__pycache__/
-
-# Environment variables
+# Environment
 .env
 .env.local
 .env.*.local
-QUICK_START/.env
-
-# Kubernetes secrets (contains sensitive data)
-# Note: These files are created by GitHub Actions workflow for ArgoCD sync
-# They are committed to Git but contain base64-encoded or stringData values
-# Original secrets only exist in: Local .env, S3 .env, GitHub Secrets
-# k8s/01-secrets.yaml  # Commented out - needed for ArgoCD sync
 
 # IDE
 .vscode/
@@ -48,11 +25,5 @@ dist/
 build/
 *.log
 
-# Screenshots
-data_collector/screenshots/
-
-# Local development data (database, etc.)
-data/
-
-
+# GitNexus
 .gitnexus

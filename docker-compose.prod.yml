@@ -1,60 +1,46 @@
-# ════════════════════════════════════════════════════════════
-# FinansAsistan - Production Docker Compose
-# Application Stack (Postgres, Backend, Frontend)
-# ════════════════════════════════════════════════════════════
+# FinansAsistan - Production Deploy
+# Basit: postgres + backend + frontend + cloudflared tunnel
 
 services:
-  # ──────────────────────────────────────────────────────────
-  # PostgreSQL Database
-  # ──────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
-    container_name: finans-postgres-prod
+    container_name: finans-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
     volumes:
-      - postgres_data_prod:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
       - ./bootstrap/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
-      start_period: 30s
       retries: 10
     restart: unless-stopped
     networks:
-      - finans-network
+      - finans-net
 
-  # ──────────────────────────────────────────────────────────
-  # Backend API (Node.js + Express)
-  # ──────────────────────────────────────────────────────────
   backend:
     build:
       context: ./back
       dockerfile: Dockerfile
-    container_name: finans-backend-prod
+    container_name: finans-backend
     environment:
       NODE_ENV: production
       PORT: 5000
       DB_HOST: postgres
       DB_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       DB_NAME: ${POSTGRES_DB}
       DB_USER: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_POOL_SIZE: 50
-      DB_SSL: "${DB_SSL:-true}"
+      DB_SSL: "false"
       JWT_SECRET: ${JWT_SECRET}
       EMAIL_USER: ${EMAIL_USER}
       EMAIL_PASS: ${EMAIL_PASS}
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}
-      SMTP_SSL: "${SMTP_SSL:-true}"
+      SMTP_SSL: "${SMTP_SSL:-false}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,46 +48,41 @@ services:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
       timeout: 10s
-      start_period: 60s
       retries: 5
     restart: unless-stopped
     networks:
-      - finans-network
+      - finans-net
 
-  # ──────────────────────────────────────────────────────────
-  # Frontend (React) - Production Build
-  # ──────────────────────────────────────────────────────────
   frontend:
     build:
       context: ./front
       dockerfile: Dockerfile
-    container_name: finans-frontend-prod
+    container_name: finans-frontend
     ports:
       - "80:80"
     depends_on:
       backend:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:80/ || exit 1"]
-      interval: 30s
-      timeout: 10s
-      start_period: 30s
-      retries: 3
     restart: unless-stopped
     networks:
-      - finans-network
+      - finans-net
 
-# ══════════════════════════════════════════════════════════════
-# Networks
-# ══════════════════════════════════════════════════════════════
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: finans-cloudflared
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: unless-stopped
+    networks:
+      - finans-net
+    depends_on:
+      - frontend
+      - backend
+
 networks:
-  finans-network:
-    name: finans-network-prod
+  finans-net:
+    name: finans-network
     driver: bridge
 
-# ══════════════════════════════════════════════════════════════
-# Volumes
-# ══════════════════════════════════════════════════════════════
 volumes:
-  postgres_data_prod:
-    name: finans-postgres-data-prod
+  postgres_data:
+    name: finans-postgres-data
