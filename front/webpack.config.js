@@ -83,7 +83,7 @@ module.exports = (env, argv) => {
           },
           // Fluid simulation files
           {
-            from: path.resolve(__dirname, 'fluid-sim.js'),
+            from: path.resolve(__dirname, 'script.js'),
             to: path.resolve(__dirname, 'dist', 'fluid-sim.js'),
             noErrorOnMissing: true,
           },

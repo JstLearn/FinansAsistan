@@ -33,6 +33,31 @@ const UserInfo = ({ onLogout }) => {
     const [delegateEmail, setDelegateEmail] = useState('');
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteYetkiId, setDeleteYetkiId] = useState(null);
+    const [fluidEnabled, setFluidEnabled] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('fluidEnabled') !== 'false';
+        }
+        return true;
+    });
+
+    const toggleFluidSimulation = () => {
+        const newValue = !fluidEnabled;
+        setFluidEnabled(newValue);
+        localStorage.setItem('fluidEnabled', String(newValue));
+
+        const canvas = document.getElementById('fluid-canvas');
+        if (canvas) {
+            canvas.style.opacity = newValue ? '1' : '0';
+        }
+    };
+
+    // Sayfa yüklendiğinde fluid durumunu uygula
+    useEffect(() => {
+        const canvas = document.getElementById('fluid-canvas');
+        if (canvas) {
+            canvas.style.opacity = fluidEnabled ? '1' : '0';
+        }
+    }, []);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -257,7 +282,24 @@ const UserInfo = ({ onLogout }) => {
                     transform: [{ translateY: isVisible ? 0 : -150 }]
                 }
             ]}>
-                <Text style={styles.email} numberOfLines={1}>{user.username}</Text>
+                <TouchableOpacity onPress={handleUsernameClick} activeOpacity={0.7}>
+                    <Text style={styles.email} numberOfLines={1}>{user.username}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={toggleFluidSimulation}
+                    style={styles.fluidToggle}
+                    activeOpacity={0.7}
+                >
+                    <View style={[
+                        styles.fluidToggleTrack,
+                        { backgroundColor: fluidEnabled ? '#22c55e' : '#6b7280' }
+                    ]}>
+                        <View style={[
+                            styles.fluidToggleThumb,
+                            { transform: [{ translateX: fluidEnabled ? 14 : 0 }] }
+                        ]} />
+                    </View>
+                </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.logoutButton, getLogoutButtonStyle()]}
                     onPress={handleLogout}
@@ -869,7 +911,8 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(0, 123, 255, 0.3)',
         flexDirection: 'row',
         alignItems: 'center',
-        gap: '6px',
+        gap: '8px',
+        flexShrink: 0,
         transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
         boxShadow: '0 2px 8px rgba(0,123,255,0.3), 0 1px 3px rgba(0,0,0,0.2), inset 0 0.5px 1px rgba(255,255,255,0.15)',
         backdropFilter: 'blur(6px)',
@@ -881,12 +924,32 @@ const styles = StyleSheet.create({
     email: {
         fontFamily: GLOBAL_FONT_FAMILY,
         color: '#fff',
-        fontSize: '13px',
+        fontSize: '12px',
         fontWeight: '500',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        maxWidth: '180px',
+        flex: 1,
+        minWidth: '80px',
+    },
+    fluidToggle: {
+        cursor: 'pointer',
+        flexShrink: 0,
+    },
+    fluidToggleTrack: {
+        width: '32px',
+        height: '18px',
+        borderRadius: '9px',
+        padding: '2px',
+        justifyContent: 'center',
+        transition: 'background-color 0.2s ease',
+    },
+    fluidToggleThumb: {
+        width: '14px',
+        height: '14px',
+        borderRadius: '7px',
+        backgroundColor: '#fff',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
     },
     logoutButton: {
         backgroundColor: '#ff3b30',
