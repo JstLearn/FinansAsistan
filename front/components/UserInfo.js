@@ -290,13 +290,13 @@ const UserInfo = ({ onLogout }) => {
                     style={styles.fluidToggle}
                     activeOpacity={0.7}
                 >
-                    <View style={[
-                        styles.fluidToggleTrack,
-                        { backgroundColor: fluidEnabled ? '#22c55e' : '#6b7280' }
-                    ]}>
+                    <View style={styles.fluidToggleTrack}>
                         <View style={[
                             styles.fluidToggleThumb,
-                            { transform: [{ translateX: fluidEnabled ? 14 : 0 }] }
+                            {
+                                transform: [{ translateX: fluidEnabled ? 14 : 0 }],
+                                backgroundColor: fluidEnabled ? '#22c55e' : '#ef4444'
+                            }
                         ]} />
                     </View>
                 </TouchableOpacity>
@@ -320,13 +320,12 @@ const UserInfo = ({ onLogout }) => {
                         position: 'fixed',
                         top: 0,
                         left: 0,
-                        right: 0,
-                        bottom: 0,
+                        width: '100vw',
+                        height: '100vh',
                         backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 10000
+                        display: 'grid',
+                        placeItems: 'center',
+                        zIndex: 10003
                     }}
                     onClick={() => setShowYetkiModal(false)}
                 >
@@ -916,10 +915,8 @@ const styles = StyleSheet.create({
         transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
         boxShadow: '0 2px 8px rgba(0,123,255,0.3), 0 1px 3px rgba(0,0,0,0.2), inset 0 0.5px 1px rgba(255,255,255,0.15)',
         backdropFilter: 'blur(6px)',
-        '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: '0 8px 24px rgba(0,123,255,0.4), 0 3px 10px rgba(0,0,0,0.3), 0 0 16px rgba(0,123,255,0.3)',
-        }
+        width: 'auto',
+        maxWidth: '400px',
     },
     email: {
         fontFamily: GLOBAL_FONT_FAMILY,
@@ -929,8 +926,9 @@ const styles = StyleSheet.create({
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        flex: 1,
-        minWidth: '80px',
+        width: 'auto',
+        maxWidth: '120px',
+        flexShrink: 1,
     },
     fluidToggle: {
         cursor: 'pointer',
@@ -943,6 +941,10 @@ const styles = StyleSheet.create({
         padding: '2px',
         justifyContent: 'center',
         transition: 'background-color 0.2s ease',
+        borderWidth: '1.5px',
+        borderStyle: 'solid',
+        borderColor: 'rgba(0, 123, 255, 0.8)',
+        backgroundColor: 'rgba(0, 123, 255, 0.2)',
     },
     fluidToggleThumb: {
         width: '14px',
@@ -950,6 +952,10 @@ const styles = StyleSheet.create({
         borderRadius: '7px',
         backgroundColor: '#fff',
         boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        transition: 'background-color 0.2s ease',
+        borderWidth: '1px',
+        borderStyle: 'solid',
+        borderColor: 'rgba(0, 0, 0, 0.15)',
     },
     logoutButton: {
         backgroundColor: '#ff3b30',
@@ -965,15 +971,6 @@ const styles = StyleSheet.create({
                     inset 0 -1px 3px rgba(200,35,51,0.5),
                     inset 0 1px 3px rgba(255,107,95,0.35)`,
         cursor: 'pointer',
-        '&:hover': {
-            transform: 'translateY(-1px) scale(1.03)',
-            backgroundColor: 'rgba(255, 59, 48, 0.5)',
-            boxShadow: '0 4px 12px rgba(255,59,48,0.5), 0 0 12px rgba(255,59,48,0.3)',
-        },
-        '&:active': {
-            transform: 'translateY(0px) scale(1)',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.2)',
-        }
     },
     logoutText: {
         fontFamily: GLOBAL_FONT_FAMILY,

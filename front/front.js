@@ -1533,7 +1533,7 @@ const AppContent = () => {
         paddingTop: '8px',
         paddingLeft: '8px',
         paddingRight: '8px',
-        zIndex: 1000,
+        zIndex: 10002,
       }}>
         <Logo onReset={handleLogoClick} />
         <UserInfo onLogout={resetAllStates} />
