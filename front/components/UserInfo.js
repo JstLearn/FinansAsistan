@@ -253,16 +253,13 @@ const UserInfo = ({ onLogout }) => {
             <View style={[
                 styles.container,
                 {
-                    transform: [{ translateY: isVisible ? 0 : -150 }],
                     opacity: isVisible ? 1 : 0,
-                    pointerEvents: isVisible ? 'auto' : 'none'
+                    transform: [{ translateY: isVisible ? 0 : -150 }]
                 }
             ]}>
-                <TouchableOpacity onPress={handleUsernameClick}>
-                    <Text style={styles.username}>{user.username}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                    style={[styles.logoutButton, getLogoutButtonStyle()]} 
+                <Text style={styles.email} numberOfLines={1}>{user.username}</Text>
+                <TouchableOpacity
+                    style={[styles.logoutButton, getLogoutButtonStyle()]}
                     onPress={handleLogout}
                     onPressIn={() => setIsLogoutPressed(true)}
                     onPressOut={() => setIsLogoutPressed(false)}
@@ -865,70 +862,60 @@ const UserInfo = ({ onLogout }) => {
 const styles = StyleSheet.create({
     container: {
         backgroundColor: 'rgba(0, 123, 255, 0.15)',
-        padding: 'clamp(3px, 1vw, 10px)',
-        paddingHorizontal: 'clamp(4px, 1.5vw, 18px)',
-        borderRadius: 'clamp(8px, 2vw, 25px)',
-        position: 'fixed',
-        top: 'clamp(4px, 1vw, 10px)',
-        right: 'clamp(4px, 1vw, 10px)',
-        borderWidth: 'clamp(1px, 0.2vw, 2px)',
+        padding: '6px 10px',
+        borderRadius: '16px',
+        borderWidth: '1px',
         borderStyle: 'solid',
         borderColor: 'rgba(0, 123, 255, 0.3)',
-        zIndex: 1000,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 'clamp(3px, 1vw, 12px)',
+        gap: '6px',
         transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-        boxShadow: '0 clamp(3px, 0.6vw, 6px) clamp(10px, 2vw, 20px) rgba(0,123,255,0.3), 0 clamp(1px, 0.2vw, 2px) clamp(4px, 0.8vw, 8px) rgba(0,0,0,0.2), inset 0 clamp(0.5px, 0.1vw, 1px) clamp(1px, 0.2vw, 2px) rgba(255,255,255,0.15)',
-        backdropFilter: 'blur(clamp(6px, 1.2vw, 12px))',
+        boxShadow: '0 2px 8px rgba(0,123,255,0.3), 0 1px 3px rgba(0,0,0,0.2), inset 0 0.5px 1px rgba(255,255,255,0.15)',
+        backdropFilter: 'blur(6px)',
         '&:hover': {
-            transform: 'translateY(-3px)',
-            boxShadow: '0 10px 30px rgba(0,123,255,0.4), 0 4px 12px rgba(0,0,0,0.3), 0 0 20px rgba(0,123,255,0.3)',
+            transform: 'translateY(-2px)',
+            boxShadow: '0 8px 24px rgba(0,123,255,0.4), 0 3px 10px rgba(0,0,0,0.3), 0 0 16px rgba(0,123,255,0.3)',
         }
     },
-    username: {
+    email: {
         fontFamily: GLOBAL_FONT_FAMILY,
         color: '#fff',
-        fontSize: 'clamp(7px, 1.2vw, 14px)',
+        fontSize: '13px',
         fontWeight: '500',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        maxWidth: 'clamp(40px, 15vw, 150px)',
-        cursor: 'pointer',
-        textDecorationLine: 'underline',
-        textDecorationStyle: 'dotted'
+        maxWidth: '180px',
     },
     logoutButton: {
         backgroundColor: '#ff3b30',
-        paddingVertical: 'clamp(2px, 0.8vw, 8px)',
-        paddingHorizontal: 'clamp(4px, 1.2vw, 14px)',
-        borderRadius: 'clamp(6px, 1.5vw, 18px)',
+        paddingVertical: '4px',
+        paddingHorizontal: '10px',
+        borderRadius: '10px',
         borderWidth: 1,
         borderStyle: 'solid',
         borderColor: 'rgba(255,107,95,0.3)',
         transition: 'all 0.3s ease',
-        boxShadow: `0 clamp(2px, 0.8vw, 8px) clamp(5px, 2vw, 20px) rgba(255,59,48,0.3), 
-                    0 clamp(1px, 0.3vw, 3px) clamp(2px, 1vw, 10px) rgba(0,0,0,0.25), 
-                    inset 0 clamp(-0.5px, -0.2vw, -2px) clamp(1.5px, 0.6vw, 6px) rgba(200,35,51,0.5), 
-                    inset 0 clamp(0.5px, 0.2vw, 2px) clamp(1.5px, 0.6vw, 6px) rgba(255,107,95,0.35),
-                    inset clamp(-0.5px, -0.15vw, -1.5px) 0 clamp(1px, 0.4vw, 4px) rgba(200,35,51,0.3),
-                    inset clamp(0.5px, 0.15vw, 1.5px) 0 clamp(1px, 0.4vw, 4px) rgba(255,107,95,0.3)`,
+        boxShadow: `0 2px 8px rgba(255,59,48,0.3),
+                    0 1px 3px rgba(0,0,0,0.25),
+                    inset 0 -1px 3px rgba(200,35,51,0.5),
+                    inset 0 1px 3px rgba(255,107,95,0.35)`,
         cursor: 'pointer',
         '&:hover': {
-            transform: 'translateY(-2px) scale(1.05)',
+            transform: 'translateY(-1px) scale(1.03)',
             backgroundColor: 'rgba(255, 59, 48, 0.5)',
-            boxShadow: '0 6px 18px rgba(255,59,48,0.5), 0 0 15px rgba(255,59,48,0.3)',
+            boxShadow: '0 4px 12px rgba(255,59,48,0.5), 0 0 12px rgba(255,59,48,0.3)',
         },
         '&:active': {
             transform: 'translateY(0px) scale(1)',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.2), inset 0 2px 4px rgba(0,0,0,0.2)',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.2)',
         }
     },
     logoutText: {
         fontFamily: GLOBAL_FONT_FAMILY,
         color: '#fff',
-        fontSize: 'clamp(6px, 1vw, 12px)',
+        fontSize: '12px',
         fontWeight: '500',
         whiteSpace: 'nowrap'
     }

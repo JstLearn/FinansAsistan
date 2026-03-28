@@ -109,6 +109,8 @@ module.exports = (env, argv) => {
       extensions: ['.js', '.jsx'],
       alias: {
         'react-native$': 'react-native-web',
+        // Patch React Native Web TextInput to wrap password inputs in form
+        'react-native-web/src/exports/TextInput': path.resolve(__dirname, 'src/patched/TextInput'),
       },
     },
     devServer: {

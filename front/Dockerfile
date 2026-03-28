@@ -59,9 +59,9 @@ RUN ls -la /usr/share/nginx/html/ && \
 # Expose port
 EXPOSE 80
 
-# Health check
+# Health check - use curl since wget has issues on Alpine
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
+  CMD curl -f http://localhost/health || exit 1
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]

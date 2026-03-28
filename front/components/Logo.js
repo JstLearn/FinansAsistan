@@ -61,37 +61,24 @@ const Logo = ({ onReset }) => {
 const styles = StyleSheet.create({
     container: {
         backgroundColor: 'rgba(0, 123, 255, 0.2)',
-        padding: 'clamp(3px, 0.6vw, 6px)',
-        borderRadius: 'clamp(12px, 2.5vw, 25px)',
-        position: 'fixed',
-        top: 'clamp(4px, 1vw, 10px)',
-        left: 'clamp(4px, 1vw, 10px)',
-        borderWidth: 'clamp(1px, 0.2vw, 2px)',
+        padding: '6px',
+        borderRadius: '20px',
+        borderWidth: '1px',
         borderStyle: 'solid',
         borderColor: 'rgba(0, 123, 255, 0.3)',
-        zIndex: 1000,
-        width: 'clamp(28px, 5vw, 50px)',
-        height: 'clamp(28px, 5vw, 50px)',
+        width: '44px',
+        height: '44px',
         justifyContent: 'center',
         alignItems: 'center',
         overflow: 'hidden',
         transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-        boxShadow: '0 clamp(3px, 0.6vw, 6px) clamp(10px, 2vw, 20px) rgba(0,123,255,0.3), 0 clamp(1px, 0.2vw, 2px) clamp(4px, 0.8vw, 8px) rgba(0,0,0,0.2), inset 0 clamp(0.5px, 0.1vw, 1px) clamp(1px, 0.2vw, 2px) rgba(255,255,255,0.15)',
-        backdropFilter: 'blur(clamp(6px, 1.2vw, 12px))',
-        cursor: 'pointer',
-        '&:hover': {
-            transform: 'translateY(-4px) scale(1.1) rotate(5deg)',
-            boxShadow: '0 12px 35px rgba(0,123,255,0.5), 0 4px 15px rgba(0,0,0,0.3), 0 0 25px rgba(0,123,255,0.4)',
-            backgroundColor: 'rgba(0, 123, 255, 0.3)',
-        },
-        '&:active': {
-            transform: 'translateY(-2px) scale(1.05)',
-            boxShadow: '0 4px 15px rgba(0,123,255,0.3), inset 0 2px 4px rgba(0,0,0,0.2)',
-        }
+        boxShadow: '0 3px 10px rgba(0,123,255,0.3), 0 1px 4px rgba(0,0,0,0.2), inset 0 0.5px 1px rgba(255,255,255,0.15)',
+        backdropFilter: 'blur(8px)',
+        cursor: 'pointer'
     },
     image: {
-        width: '220%',
-        height: '220%'
+        width: '200%',
+        height: '200%'
     }
 });
 

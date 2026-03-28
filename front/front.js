@@ -1519,11 +1519,26 @@ const AppContent = () => {
   };
 
   return (
-    <View style={{ position: 'relative', flex: 1 }}>
+    <View style={{ flex: 1 }}>
       <FluidSimulation />
-      <SafeAreaView style={[styles.container, { pointerEvents: 'box-none' }]}>
+      {/* Header Container - Logo left, UserInfo right */}
+      <View style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        paddingTop: '8px',
+        paddingLeft: '8px',
+        paddingRight: '8px',
+        zIndex: 1000,
+      }}>
         <Logo onReset={handleLogoClick} />
-      <UserInfo onLogout={resetAllStates} />
+        <UserInfo onLogout={resetAllStates} />
+      </View>
+      <SafeAreaView style={[styles.container, { pointerEvents: 'box-none' }]}>
       <ScrollView
         contentContainerStyle={[
           styles.scrollViewContent,

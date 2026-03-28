@@ -3,7 +3,8 @@ import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet } from 'reac
 import { useUser } from '../context/UserContext';
 import { GLOBAL_FONT_FAMILY } from '../styles/styles';
 
-const API_BASE_URL = 'http://localhost:5000';
+// Use relative URL in production (nginx proxy), localhost in development
+const API_BASE_URL = window.location.hostname === 'localhost' ? 'http://localhost:5000' : '';
 
 const LoginModal = ({ visible, onClose, onSuccess }) => {
   const { setUser } = useUser();
@@ -534,7 +535,7 @@ const LoginModal = ({ visible, onClose, onSuccess }) => {
               )}
             </>
           ) : (
-            <>
+            <View style={styles.formContainer}>
               <TextInput
                 style={[
                   styles.input,
@@ -551,7 +552,7 @@ const LoginModal = ({ visible, onClose, onSuccess }) => {
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
-              
+
               <TextInput
                 style={[
                   styles.input,
@@ -568,20 +569,20 @@ const LoginModal = ({ visible, onClose, onSuccess }) => {
                 textContentType="newPassword"
                 passwordRules="minlength: 8; required: upper; required: lower; required: digit; required: [-]"
               />
-              
+
               {renderPasswordRequirements()}
-              
-              <TouchableOpacity 
-                style={styles.forgotPasswordButton} 
+
+              <TouchableOpacity
+                style={styles.forgotPasswordButton}
                 onPress={handleForgotPassword}
               >
                 <Text style={styles.forgotPasswordText}>
                   Parolamı Unuttum
                 </Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.button, loading && styles.buttonDisabled, getButtonStyle()]} 
+
+              <TouchableOpacity
+                style={[styles.button, loading && styles.buttonDisabled, getButtonStyle()]}
                 onPress={handleSubmit}
                 disabled={loading}
                 onPressIn={() => setIsButtonPressed(true)}
@@ -594,7 +595,7 @@ const LoginModal = ({ visible, onClose, onSuccess }) => {
                   {loading ? 'İşleniyor...' : 'Giriş | Kayıt'}
                 </Text>
               </TouchableOpacity>
-            </>
+            </View>
           )}
         </View>
       </View>
@@ -614,11 +615,12 @@ const styles = StyleSheet.create({
     padding: 24,
     borderRadius: 16,
     width: '90%',
-    maxWidth: 400,
+    maxWidth: 380,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    position: 'relative', // Close button'un absolute positioning için referans noktası
-    overflow: 'visible', // Close button'un dışarı taşmasına izin ver
+    position: 'relative',
+    overflow: 'visible',
+    alignItems: 'stretch',
   },
   closeButton: {
     position: 'absolute',
@@ -667,6 +669,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     color: '#fff',
     fontSize: 16,
+    width: '100%',
+    boxSizing: 'border-box',
     boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.3), 0 2px 8px rgba(0,123,255,0.1)',
     transition: 'all 0.3s ease',
   },
@@ -765,6 +769,9 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     position: 'relative',
+    width: '100%',
+  },
+  formContainer: {
     width: '100%',
   },
   countdownText: {
