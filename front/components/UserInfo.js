@@ -107,12 +107,19 @@ const UserInfo = ({ onLogout, onOpenYetkiModal }) => {
                 style={styles.fluidToggle}
                 activeOpacity={0.7}
             >
-                <View style={styles.fluidToggleTrack}>
+                <View style={[
+                    styles.fluidToggleTrack,
+                    {
+                        backgroundColor: fluidEnabled ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)',
+                        borderColor: fluidEnabled ? 'rgba(34, 197, 94, 0.9)' : 'rgba(239, 68, 68, 0.9)'
+                    }
+                ]}>
                     <View style={[
                         styles.fluidToggleThumb,
                         {
                             transform: [{ translateX: fluidEnabled ? 14 : 0 }],
-                            backgroundColor: fluidEnabled ? '#22c55e' : '#ef4444'
+                            backgroundColor: fluidEnabled ? '#15803d' : '#dc2626',
+                            borderColor: fluidEnabled ? '#15803d' : '#dc2626'
                         }
                     ]} />
                 </View>
@@ -172,22 +179,18 @@ const styles = StyleSheet.create({
         borderRadius: '9px',
         padding: '2px',
         justifyContent: 'center',
-        transition: 'background-color 0.2s ease',
+        transition: 'all 0.2s ease',
         borderWidth: '1.5px',
         borderStyle: 'solid',
-        borderColor: 'rgba(0, 123, 255, 0.8)',
-        backgroundColor: 'rgba(0, 123, 255, 0.2)',
     },
     fluidToggleThumb: {
         width: '14px',
         height: '14px',
         borderRadius: '7px',
-        backgroundColor: '#fff',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-        transition: 'background-color 0.2s ease',
-        borderWidth: '1px',
+        transition: 'all 0.2s ease',
+        borderWidth: '2px',
         borderStyle: 'solid',
-        borderColor: 'rgba(0, 0, 0, 0.15)',
+        backgroundColor: '#ccc',
     },
     logoutButton: {
         backgroundColor: '#ff3b30',
