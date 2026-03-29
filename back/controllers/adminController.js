@@ -52,7 +52,7 @@ const getTableData = async (req, res) => {
     try {
         const { table } = req.params;
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 50;
+        const limit = Math.min(parseInt(req.query.limit) || 50, 1000);
         const offset = (page - 1) * limit;
 
         if (!isAllowedTable(table)) {

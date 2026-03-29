@@ -9,6 +9,7 @@ const { pool, query, transaction } = require('../config/db');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const { getVerificationEmail } = require('../utils/emailTemplates');
 const { publishEventAsync } = require('../services/kafka/producer');
 const { USER_TOPICS } = require('../services/kafka/topics');
@@ -90,7 +91,7 @@ function getTransporter() {
 
 // 6 haneli doğrulama kodu oluştur
 function generateVerificationCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return crypto.randomInt(100000, 999999).toString();
 }
 
 // Rate limiting için generic Map'ler
@@ -134,6 +135,29 @@ const resetLoginAttempts = (identifier) => {
 const addKullanici = async (req, res) => {
     try {
         const { kullanici, sifre } = req.body;
+
+        // Email format validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(kullanici)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Geçersiz e-posta formatı'
+            });
+        }
+
+        // Password validation - min 8 chars, at least 1 special char
+        if (!sifre || sifre.length < 8) {
+            return res.status(400).json({
+                success: false,
+                message: 'Şifre en az 8 karakter olmalı'
+            });
+        }
+        if (!/[!@#$%^&*(),.?":{}|<>]/.test(sifre)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Şifre en az 1 özel karakter içermeli'
+            });
+        }
 
         // E-posta kontrolü
         const checkResult = await query(
@@ -429,7 +453,7 @@ const forgotPassword = async (req, res) => {
         }
 
         // Sıfırlama kodu oluştur
-        const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const resetCode = crypto.randomInt(100000, 999999).toString();
 
         // Sıfırlama kodunu kaydet
         await query(

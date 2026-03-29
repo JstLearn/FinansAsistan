@@ -45,6 +45,12 @@ const addGelirAlacak = async (req, res) => {
         error: 'Geçersiz miktar değeri. Lütfen sayısal bir değer girin.'
       });
     }
+    if (miktar < 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Miktar negatif olamaz.'
+      });
+    }
 
     const kullanici = req.user.username;
     const ekleyen_kullanici = req.user.username;
@@ -168,6 +174,12 @@ const updateGelirAlacak = async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'Geçersiz miktar değeri. Lütfen sayısal bir değer girin.'
+      });
+    }
+    if (miktar < 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Miktar negatif olamaz.'
       });
     }
 
