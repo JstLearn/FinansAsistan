@@ -161,7 +161,7 @@ const addKullanici = async (req, res) => {
                         from: `"FinansAsistan" <${process.env.EMAIL_USER}>`,
                         to: kullanici,
                         subject: 'FinansAsistan - Yeni Doğrulama Kodunuz',
-                        html: getVerificationEmail(verificationCode)
+                        html: getVerificationEmail(verificationCode, kullanici)
                     };
 
                     await getTransporter().sendMail(mailOptions);
@@ -225,7 +225,7 @@ const addKullanici = async (req, res) => {
                 from: `"FinansAsistan" <${process.env.EMAIL_USER}>`,
                 to: kullanici,
                 subject: 'FinansAsistan - Hesap Doğrulama Kodunuz',
-                html: getVerificationEmail(verificationCode)
+                html: getVerificationEmail(verificationCode, kullanici)
             };
 
             await getTransporter().sendMail(mailOptions);

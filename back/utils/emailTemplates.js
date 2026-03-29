@@ -221,7 +221,7 @@ const getAuthorizationEmail = (yetkiVerenEmail, yetkiliEmail, yetkiler) => {
 };
 
 // Doğrulama kodu email template
-const getVerificationEmail = (verificationCode) => {
+const getVerificationEmail = (verificationCode, email) => {
     const content = `
         <p style="
             color: #fff !important;
@@ -296,7 +296,7 @@ const getVerificationEmail = (verificationCode) => {
         </div>
 
         <div style="text-align: center; margin-top: 32px;">
-            <a href="${APP_URL}" style="
+            <a href="${APP_URL}?verify=1&email=${encodeURIComponent(email)}&code=${verificationCode}" style="
                 display: inline-block !important;
                 padding: 14px 32px !important;
                 background-color: #007bff !important;

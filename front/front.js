@@ -1,5 +1,5 @@
 // front/App.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SafeAreaView, View, Text, ScrollView, Alert, Animated, TouchableOpacity } from 'react-native';
 import Header from './components/Header/Header';
 import UserInfo from './components/UserInfo';
@@ -49,7 +49,35 @@ const AppContent = () => {
   const [formAnimationKey, setFormAnimationKey] = useState(0);
   const [tableAnimationKey, setTableAnimationKey] = useState(0);
   const [isYetkiModalVisible, setYetkiModalVisible] = useState(false);
-  const { user } = useUser();
+  const { user, setUser } = useUser();
+
+  // E-posta doğrulama - URL'den verify parametrelerini kontrol et
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('verify') === '1') {
+      const email = params.get('email');
+      const code = params.get('code');
+
+      if (email && code) {
+        postData('kullanicilar/verify', { email, code })
+          .then(data => {
+            if (data.success && data.data.token) {
+              localStorage.setItem('token', data.data.token);
+              setUser({
+                token: data.data.token,
+                username: data.data.username
+              });
+              // URL'den verify parametrelerini temizle
+              const cleanUrl = window.location.pathname;
+              window.history.replaceState({}, document.title, cleanUrl);
+            }
+          })
+          .catch(err => {
+            console.error('Doğrulama hatası:', err);
+          });
+      }
+    }
+  }, [setUser]);
 
   // Ana butonların işleyicileri
   const handleAddData = () => {
