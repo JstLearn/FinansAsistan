@@ -15,6 +15,7 @@ import YetkiModal from './components/YetkiModal';
 import { UserProvider, useUser } from './context/UserContext';
 import Logo from './components/Logo';
 import FluidSimulation from './components/FluidSimulation';
+import AdminDashboard from './components/AdminDashboard';
 
 const AppContent = () => {
   // State tanımlamaları
@@ -49,6 +50,7 @@ const AppContent = () => {
   const [formAnimationKey, setFormAnimationKey] = useState(0);
   const [tableAnimationKey, setTableAnimationKey] = useState(0);
   const [isYetkiModalVisible, setYetkiModalVisible] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   const { user, setUser } = useUser();
 
   // E-posta doğrulama - URL'den verify parametrelerini kontrol et
@@ -78,6 +80,18 @@ const AppContent = () => {
       }
     }
   }, [setUser]);
+
+  // Admin panel shortcut: Ctrl+Shift+A
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+        e.preventDefault();
+        setShowAdminPanel(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Ana butonların işleyicileri
   const handleAddData = () => {
@@ -1768,6 +1782,10 @@ const AppContent = () => {
         onClose={handleModalClose}
         onSuccess={handleModalSuccess}
       />
+
+      {showAdminPanel && (
+        <AdminDashboard onClose={() => setShowAdminPanel(false)} />
+      )}
     </SafeAreaView>
     </View>
   );

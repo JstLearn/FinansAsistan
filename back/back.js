@@ -19,6 +19,7 @@ const istekRoutes = require('./routes/istekRoutes');
 const hatirlatmaRoutes = require('./routes/hatirlatmaRoutes');
 const kullaniciRoutes = require('./routes/kullaniciRoutes');
 const yetkiRoutes = require('./routes/yetkiRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 const { metricsMiddleware, getMetrics } = require('./middleware/metricsMiddleware');
 
 const app = express();
@@ -83,6 +84,7 @@ app.use('/api/gider', giderRoutes);
 app.use('/api/istek', istekRoutes);
 app.use('/api/hatirlatma', hatirlatmaRoutes);
 app.use('/api/yetki', yetkiRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Root ve favicon
 app.get('/', (req, res) => {
