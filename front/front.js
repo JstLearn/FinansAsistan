@@ -53,9 +53,15 @@ const AppContent = () => {
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const { user, setUser } = useUser();
 
-  // E-posta doğrulama - URL'den verify parametrelerini kontrol et
+  // E-posta doğrulama + Admin panel (URL ?admin=1)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
+    // Admin panel: ?admin=1
+    if (params.get('admin') === '1') {
+      setShowAdminPanel(true);
+    }
+
     if (params.get('verify') === '1') {
       const email = params.get('email');
       const code = params.get('code');
@@ -81,16 +87,16 @@ const AppContent = () => {
     }
   }, [setUser]);
 
-  // Admin panel shortcut: Ctrl+Shift+A
+  // Admin panel shortcut: Alt+X
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+      if (e.altKey && (e.key === 'X' || e.key === 'x')) {
         e.preventDefault();
         setShowAdminPanel(prev => !prev);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => document.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, []);
 
   // Ana butonların işleyicileri

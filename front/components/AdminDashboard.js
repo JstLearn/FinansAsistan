@@ -580,14 +580,15 @@ const styles = StyleSheet.create({
     insertBtn: {
         paddingHorizontal: 16,
         paddingVertical: 8,
-        backgroundColor: '#00f5d4',
+        backgroundColor: 'transparent',
         borderRadius: 6,
+        borderWidth: 0,
     },
     insertBtnText: {
         fontFamily: ADMIN_FONT,
         fontSize: 12,
         fontWeight: 'bold',
-        color: '#0a0e17',
+        color: '#00ff88',
     },
     refreshBtn: {
         width: 32,
@@ -829,14 +830,16 @@ const styles = StyleSheet.create({
     saveBtn: {
         paddingHorizontal: 20,
         paddingVertical: 10,
-        backgroundColor: '#00f5d4',
+        backgroundColor: '#00ff88',
         borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#00ff88',
     },
     saveBtnText: {
         fontFamily: ADMIN_FONT,
         fontSize: 12,
         fontWeight: 'bold',
-        color: '#0a0e17',
+        color: '#000000',
     },
     deleteText: {
         fontFamily: ADMIN_FONT,
