@@ -1569,7 +1569,7 @@ const AppContent = () => {
   };
 
   return (
-    <View style={{ flex: 1, minHeight: '100vh' }}>
+    <View style={{ flex: 1 }}>
       <FluidSimulation />
       {/* Header Container - Logo left, UserInfo right */}
       <View style={{
