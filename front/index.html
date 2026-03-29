@@ -1014,10 +1014,14 @@
 
         /* Cursor Glow Canvas - Styles handled by JavaScript */
 
-        /* HTML ve Body - Site arka plan rengi */
+        /* HTML ve Body - Site arka plan rengi - Mobile viewport fix */
         html, body {
             isolation: isolate !important;
-            background-color: #1a1a2e !important; /* Site koyu tema arka plan */
+            background-color: #1a1a2e !important;
+            height: 100vh;
+            height: -webkit-fill-available;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
         }
 
         /* React Root - UI elemanları - KESİN OVERRIDE */
@@ -1026,6 +1030,8 @@
             z-index: 1 !important;
             background-color: transparent !important;
             pointer-events: auto !important;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
         }
 
         /* Tüm React Native Web inline style'larını geçersiz kıl */
@@ -1096,7 +1102,7 @@
 </head>
 <body>
     <!-- Fluid Simulation Canvas -->
-    <canvas id="fluid-canvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:auto;background:transparent;"></canvas>
+    <canvas id="fluid-canvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;background:transparent;"></canvas>
     <script>window.ga = window.ga || function(){};</script>
     <div id="root"></div>
     <script>
