@@ -2073,16 +2073,29 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
         // number-with-currency ile aynı tasarım
         return (
           <View style={{ position: 'relative', width: '100%' }}>
-            {/* Floating Label - Her zaman yukarıda */}
-            <Text style={[
-              styles.formLabelFloating,
+            {/* Floating Label - View ile sarıyoruz ki position: absolute düzgün çalışsın */}
+            <View style={[
               {
-                color: 'rgba(0, 123, 255, 0.8)',
-                fontSize: 'clamp(9px, 1.8vw, 12px)',
+                position: 'absolute',
+                left: 'clamp(10px, 1.8vw, 18px)',
+                top: 'clamp(-14px, -1.8vw, -18px)',
+                zIndex: 2,
+                backgroundColor: 'rgba(20, 25, 35, 0.95)',
+                paddingLeft: 'clamp(4px, 0.8vw, 8px)',
+                paddingRight: 'clamp(4px, 0.8vw, 8px)',
+                paddingTop: 'clamp(1px, 0.2vw, 2px)',
+                paddingBottom: 'clamp(1px, 0.2vw, 2px)',
+                borderRadius: 'clamp(3px, 0.6vw, 6px)',
               }
             ]}>
-              {label}
-            </Text>
+              <Text style={{
+                color: 'rgba(0, 123, 255, 0.8)',
+                fontSize: 'clamp(9px, 1.8vw, 12px)',
+                fontWeight: '500',
+              }}>
+                {label}
+              </Text>
+            </View>
 
             {/* İçerik row'u */}
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -2412,16 +2425,30 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
         
         return (
           <View style={{ position: 'relative', width: '100%' }}>
-            {/* Floating Label - Her zaman yukarıda */}
-            <Text style={[
+            {/* Floating Label - View ile sarıyoruz ki position: absolute düzgün çalışsın */}
+            <View style={[
               styles.formLabelFloating,
               {
-                color: 'rgba(0, 123, 255, 0.8)',
-                fontSize: 'clamp(9px, 1.8vw, 12px)',
+                position: 'absolute',
+                left: 'clamp(10px, 1.8vw, 18px)',
+                top: 'clamp(-14px, -1.8vw, -18px)',
+                zIndex: 2,
+                backgroundColor: 'rgba(20, 25, 35, 0.95)',
+                paddingLeft: 'clamp(4px, 0.8vw, 8px)',
+                paddingRight: 'clamp(4px, 0.8vw, 8px)',
+                paddingTop: 'clamp(1px, 0.2vw, 2px)',
+                paddingBottom: 'clamp(1px, 0.2vw, 2px)',
+                borderRadius: 'clamp(3px, 0.6vw, 6px)',
               }
             ]}>
-              {label}
-            </Text>
+              <Text style={{
+                color: 'rgba(0, 123, 255, 0.8)',
+                fontSize: 'clamp(9px, 1.8vw, 12px)',
+                fontWeight: '500',
+              }}>
+                {label}
+              </Text>
+            </View>
 
             {/* İçerik row'u - flex layout */}
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
