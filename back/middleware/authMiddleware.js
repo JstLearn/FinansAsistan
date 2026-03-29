@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { query } = require('../config/db');
 
 // JWT Secret'ı başlangıçta kontrol et
 const getJwtSecret = () => {
@@ -24,7 +25,7 @@ const createNewToken = (user) => {
     );
 };
 
-const authMiddleware = (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
     try {
         // Token'ı header'dan al
         const token = req.headers.authorization?.split(' ')[1];
@@ -45,6 +46,19 @@ const authMiddleware = (req, res, next) => {
                 username: decoded.username,
                 id: decoded.id
             };
+
+            // Kullanıcının hala DB'de olup olmadığını kontrol et (silinmişse logout ettir)
+            const userCheck = await query(
+                'SELECT id FROM kullanicilar WHERE id = $1 AND onaylandi = TRUE',
+                [decoded.id]
+            );
+            if (userCheck.rows.length === 0) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Hesap bulunamadı veya silinmiş. Lütfen tekrar giriş yapın.',
+                    code: 'USER_DELETED'
+                });
+            }
 
             // Token'ın süresi dolmak üzereyse yenile (1 saatten az kaldıysa)
             const tokenExp = decoded.exp * 1000;
