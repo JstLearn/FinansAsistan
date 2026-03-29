@@ -89,6 +89,9 @@ let gradienSubtractProgram;
 // Material globals
 let displayMaterial;
 
+// Dithering texture
+let ditheringTexture = null;
+
 // blit function global
 let blit;
 
@@ -744,8 +747,10 @@ function initShadersAndPrograms() {
     // Create display material
     displayMaterial = new Material(baseVertexShader, displayShaderSource);
 
-    // Initialize dithering texture
-    ditheringTexture = createTextureAsync('LDR_LLL1_0.png');
+    // Initialize dithering texture on first load
+    if (ditheringTexture == null) {
+        ditheringTexture = createTextureAsync('LDR_LLL1_0.png');
+    }
 }
 
 function getWebGLContext (canvas) {
@@ -1078,6 +1083,11 @@ function initFramebuffers () {
     const rg      = ext.formatRG;
     const r       = ext.formatR;
     const filtering = ext.supportLinearFiltering ? gl.LINEAR : gl.NEAREST;
+
+    // Initialize dithering texture on first load
+    if (ditheringTexture == null) {
+        ditheringTexture = createTextureAsync('LDR_LLL1_0.png');
+    }
 
     gl.disable(gl.BLEND);
 
@@ -1433,9 +1443,11 @@ function drawDisplay (target) {
     gl.uniform1i(displayMaterial.uniforms.uTexture, dye.read.attach(0));
     if (config.BLOOM) {
         gl.uniform1i(displayMaterial.uniforms.uBloom, bloom.attach(1));
-        gl.uniform1i(displayMaterial.uniforms.uDithering, ditheringTexture.attach(2));
-        let scale = getTextureScale(ditheringTexture, width, height);
-        gl.uniform2f(displayMaterial.uniforms.ditherScale, scale.x, scale.y);
+        if (ditheringTexture != null) {
+            gl.uniform1i(displayMaterial.uniforms.uDithering, ditheringTexture.attach(2));
+            let scale = getTextureScale(ditheringTexture, width, height);
+            gl.uniform2f(displayMaterial.uniforms.ditherScale, scale.x, scale.y);
+        }
     }
     if (config.SUNRAYS)
         gl.uniform1i(displayMaterial.uniforms.uSunrays, sunrays.attach(3));

@@ -5,7 +5,8 @@
   "scripts": {
     "web": "webpack serve --mode development --open --config webpack.config.js",
     "start": "webpack serve --mode development --open --config webpack.config.js",
-    "build": "webpack --mode production --config webpack.config.js"
+    "build": "webpack --mode production --config webpack.config.js && npm run copy:fluid",
+    "copy:fluid": "cp script.js dist/fluid-sim.js"
   },
   "dependencies": {
     "@react-native-community/datetimepicker": "^8.2.0",

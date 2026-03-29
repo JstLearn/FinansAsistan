@@ -81,12 +81,7 @@ module.exports = (env, argv) => {
             to: path.resolve(__dirname, 'dist', 'cursorGlow.js'),
             noErrorOnMissing: true,
           },
-          // Fluid simulation files
-          {
-            from: path.resolve(__dirname, 'script.js'),
-            to: path.resolve(__dirname, 'dist', 'fluid-sim.js'),
-            noErrorOnMissing: true,
-          },
+          // Other files
           {
             from: path.resolve(__dirname, 'dat.gui.min.js'),
             to: path.resolve(__dirname, 'dist', 'dat.gui.min.js'),
