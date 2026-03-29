@@ -16,6 +16,11 @@ const isAllowedTable = (tableName) => {
     return ALLOWED_TABLES.includes(tableName.toLowerCase());
 };
 
+// Validate column name to prevent SQL injection
+const isValidColumnName = (name) => {
+    return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name);
+};
+
 // List all accessible tables with row count
 const listTables = async (req, res) => {
     try {
@@ -106,6 +111,13 @@ const insertRow = async (req, res) => {
 
         const keys = Object.keys(data);
         const values = Object.values(data);
+
+        // Validate column names to prevent SQL injection
+        const invalidColumn = keys.find(k => !isValidColumnName(k));
+        if (invalidColumn) {
+            return res.status(400).json({ success: false, message: `Geçersiz sütun adı: ${invalidColumn}` });
+        }
+
         const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
         const columns = keys.join(', ');
 
@@ -135,6 +147,13 @@ const updateRow = async (req, res) => {
 
         const keys = Object.keys(data);
         const values = Object.values(data);
+
+        // Validate column names to prevent SQL injection
+        const invalidColumn = keys.find(k => !isValidColumnName(k));
+        if (invalidColumn) {
+            return res.status(400).json({ success: false, message: `Geçersiz sütun adı: ${invalidColumn}` });
+        }
+
         const setClause = keys.map((key, i) => `${key} = $${i + 1}`).join(', ');
 
         const result = await query(
@@ -184,15 +203,22 @@ const executeQuery = async (req, res) => {
             return res.status(400).json({ success: false, message: 'SQL sorgusu gerekli' });
         }
 
+        // Block multiple statements (semicolon)
+        if (sql.includes(';')) {
+            return res.status(403).json({ success: false, message: 'Birden fazla sorgu izin verilmiyor' });
+        }
+
         const upperSql = sql.trim().toUpperCase();
 
         // Only allow SELECT, INSERT, UPDATE, DELETE
-        if (!['SELECT', 'INSERT', 'UPDATE', 'DELETE'].includes(upperSql.split(' ')[0])) {
+        const firstWord = upperSql.split(/\s+/)[0];
+        if (!['SELECT', 'INSERT', 'UPDATE', 'DELETE'].includes(firstWord)) {
             return res.status(403).json({ success: false, message: 'Sadece SELECT, INSERT, UPDATE, DELETE izin var' });
         }
 
-        // Block dangerous operations
-        if (upperSql.includes('DROP') || upperSql.includes('TRUNCATE') || upperSql.includes('ALTER')) {
+        // Block dangerous operations (case-insensitive)
+        const dangerous = ['DROP', 'TRUNCATE', 'ALTER', 'CREATE', 'GRANT', 'REVOKE', 'EXECUTE', 'EXEC', 'CALL', 'INTO OUTFILE', 'INTO DUMPFILE'];
+        if (dangerous.some(k => upperSql.includes(k))) {
             return res.status(403).json({ success: false, message: 'Bu operasyon izin verilmiyor' });
         }
 
