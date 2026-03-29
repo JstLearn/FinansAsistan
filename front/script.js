@@ -756,10 +756,9 @@ function initShadersAndPrograms() {
 function getWebGLContext (canvas) {
     const params = { alpha: true, depth: false, stencil: false, antialias: false, preserveDrawingBuffer: false };
 
-    let gl = canvas.getContext('webgl2', params);
-    const isWebGL2 = !!gl;
-    if (!isWebGL2)
-        gl = canvas.getContext('webgl', params) || canvas.getContext('experimental-webgl', params);
+    // Shader'lar GLSL ES 1.0 ile yazılmış, WebGL1 kullan
+    let gl = canvas.getContext('webgl', params) || canvas.getContext('experimental-webgl', params);
+    const isWebGL2 = false;
 
     let halfFloat;
     let supportLinearFiltering;
@@ -1038,7 +1037,7 @@ function createProgram (vertexShader, fragmentShader) {
     gl.linkProgram(program);
 
     if (!gl.getProgramParameter(program, gl.LINK_STATUS))
-        console.trace(gl.getProgramInfoLog(program));
+        console.error('[WebGL] Program link error:', gl.getProgramInfoLog(program));
 
     return program;
 }
@@ -1061,7 +1060,7 @@ function compileShader (type, source, keywords) {
     gl.compileShader(shader);
 
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
-        console.trace(gl.getShaderInfoLog(shader));
+        console.error('[WebGL] Shader compile error:', gl.getShaderInfoLog(shader));
 
     return shader;
 };
