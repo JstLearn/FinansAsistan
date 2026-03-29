@@ -1386,7 +1386,7 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
               style={{
                 ...selectStyle,
                 flex: (isParaCategory || showVarlikDropdown) ? 1 : undefined,
-                paddingRight: (isParaCategory || showVarlikDropdown) ? 30 : selectStyle.paddingRight,
+                paddingRight: selectStyle.paddingRight,
                 position: 'relative'
               }}
               onClick={() => {
@@ -1562,10 +1562,8 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
                 <div
                   ref={paraBirimiDropdownButtonRef}
                   style={{
-                    position: 'absolute',
-                    right: 50,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
+                    marginLeft: 8,
+                    flexShrink: 0,
                     width: 90,
                     height: 24,
                     borderRadius: 6,
@@ -1781,10 +1779,8 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
                 <div
                   ref={selectWithCustomDropdownButtonRef}
                   style={{
-                    position: 'absolute',
-                    right: 50,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
+                    marginLeft: 8,
+                    flexShrink: 0,
                     width: 120,
                     height: 24,
                     borderRadius: 6,
@@ -2076,21 +2072,26 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
         
         // number-with-currency ile aynı tasarım
         return (
-          <View style={{ 
-            flexDirection: 'row', 
-            alignItems: 'center', 
-            width: '100%',
-            position: 'relative'
-          }}>
+          <View style={{ position: 'relative', width: '100%' }}>
+            {/* Floating Label - Her zaman yukarıda */}
+            <Text style={[
+              styles.formLabelFloating,
+              {
+                color: 'rgba(0, 123, 255, 0.8)',
+                fontSize: 'clamp(9px, 1.8vw, 12px)',
+              }
+            ]}>
+              {label}
+            </Text>
+
+            {/* İçerik row'u */}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {/* Mod Seçici (Link/Fiyat) - SOLDA */}
             <View style={{
-              position: 'absolute',
-              left: 8,
-              top: '50%',
-              transform: 'translateY(-50%)',
               flexDirection: 'row',
               gap: 8,
-              zIndex: 10
+              flexShrink: 0,
+              marginRight: 8
             }}>
               {/* Link Radio */}
               <TouchableOpacity
@@ -2167,7 +2168,6 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
                       ? `inset 0 2px 4px rgba(0,0,0,0.1), 0 2px 8px rgba(40,167,69,0.2), 0 0 12px rgba(40,167,69,0.15)`
                       : `inset 0 2px 4px rgba(0,0,0,0.1), 0 2px 8px rgba(220,53,69,0.2), 0 0 12px rgba(220,53,69,0.15)`,
                     flex: 1,
-                    paddingLeft: 75,
                     paddingTop: 'clamp(14px, 2.5vw, 18px)',
                     paddingBottom: 'clamp(10px, 2vw, 14px)',
                     paddingRight: 'clamp(10px, 2vw, 14px)'
@@ -2208,10 +2208,8 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
                     setShowLinkOrPriceCurrencyDropdown(!showLinkOrPriceCurrencyDropdown);
                   }}
                   style={{
-                    position: 'absolute',
-                    left: 80,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
+                    flexShrink: 0,
+                    marginRight: 8,
                     width: 90,
                     height: 24,
                     borderRadius: 6,
@@ -2353,7 +2351,6 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
                         ? `inset 0 2px 4px rgba(0,0,0,0.1), 0 2px 8px rgba(40,167,69,0.2), 0 0 12px rgba(40,167,69,0.15)`
                         : `inset 0 2px 4px rgba(0,0,0,0.1), 0 2px 8px rgba(220,53,69,0.2), 0 0 12px rgba(220,53,69,0.15)`,
                       flex: 1,
-                      paddingLeft: 180,
                       paddingTop: 'clamp(14px, 2.5vw, 18px)',
                       paddingBottom: 'clamp(10px, 2vw, 14px)',
                       paddingRight: 'clamp(10px, 2vw, 14px)'
@@ -2373,17 +2370,7 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
                 />
               </>
             )}
-            
-            {/* Floating Label - Her zaman yukarıda */}
-            <Text style={[
-              styles.formLabelFloating,
-              {
-                color: 'rgba(0, 123, 255, 0.8)',
-                fontSize: 'clamp(9px, 1.8vw, 12px)',
-              }
-            ]}>
-              {label}
-            </Text>
+            </View>
           </View>
         );
 
@@ -2424,12 +2411,7 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
         const checkboxWidth = hasCheckbox ? 180 : 0;
         
         return (
-          <View style={{ 
-            flexDirection: 'row', 
-            alignItems: 'center', 
-            width: '100%',
-            position: 'relative'
-          }}>
+          <View style={{ position: 'relative', width: '100%' }}>
             {/* Floating Label - Her zaman yukarıda */}
             <Text style={[
               styles.formLabelFloating,
@@ -2440,15 +2422,15 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
             ]}>
               {label}
             </Text>
-            
+
+            {/* İçerik row'u - flex layout */}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {/* Para Birimi Custom Dropdown - SOLDA */}
             <div
               ref={currencyDropdownButtonRef}
               style={{
-                position: 'absolute',
-                left: 8,
-                top: '50%',
-                transform: 'translateY(-50%)',
+                flexShrink: 0,
+                marginRight: 8,
                 width: 90,
                 height: 24,
                 borderRadius: 6,
@@ -2613,8 +2595,6 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
                     ? `inset 0 2px 4px rgba(0,0,0,0.1), 0 2px 8px rgba(40,167,69,0.2), 0 0 12px rgba(40,167,69,0.15)`
                     : `inset 0 2px 4px rgba(0,0,0,0.1), 0 2px 8px rgba(220,53,69,0.2), 0 0 12px rgba(220,53,69,0.15)`,
                   flex: 1,
-                  paddingLeft: 105,
-                  paddingRight: hasCheckbox ? checkboxWidth + 10 : 10,
                   paddingTop: 'clamp(14px, 2.5vw, 18px)',
                   color: numberValue && numberValue.toString().trim() !== '' 
                     ? 'rgba(40, 167, 69, 0.95)' 
@@ -2645,15 +2625,12 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
             
             {/* Miktar Belirsiz Checkbox - SAĞDA */}
             {field.hasUncertainCheckbox && (
-              <View style={{ 
-                position: 'absolute', 
-                right: 8, 
-                top: '50%',
-                transform: 'translateY(-50%)',
-                flexDirection: 'row', 
+              <View style={{
+                flexShrink: 0,
+                marginLeft: 8,
+                flexDirection: 'row',
                 alignItems: 'center',
-                gap: 6,
-                zIndex: 5
+                gap: 6
               }}>
                 <TouchableOpacity
                   onPress={() => {
@@ -2704,6 +2681,7 @@ const FormField = ({ field, value, onChange, hasError, formData, setFormData, se
                 </TouchableOpacity>
               </View>
             )}
+            </View>
           </View>
         );
 
