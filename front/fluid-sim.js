@@ -1496,27 +1496,25 @@ canvas.addEventListener('mouseleave', () => {
     pointers[0].down = false;
 });
 
-canvas.addEventListener('touchstart', e => {
-    e.preventDefault();
-    const touches = e.targetTouches;
+window.addEventListener('touchstart', e => {
+    const touches = e.touches;
     while (touches.length >= pointers.length)
         pointers.push(new pointerPrototype());
     for (let i = 0; i < touches.length; i++) {
-        let posX = scaleByPixelRatio(touches[i].pageX);
-        let posY = scaleByPixelRatio(touches[i].pageY);
+        let posX = scaleByPixelRatio(touches[i].clientX);
+        let posY = scaleByPixelRatio(touches[i].clientY);
         updatePointerDownData(pointers[i + 1], touches[i].identifier, posX, posY);
     }
-});
+}, { passive: true });
 
-canvas.addEventListener('touchmove', e => {
-    e.preventDefault();
-    const touches = e.targetTouches;
+window.addEventListener('touchmove', e => {
+    const touches = e.touches;
     for (let i = 0; i < touches.length; i++) {
         let pointer = pointers[i + 1];
-        let posX = scaleByPixelRatio(touches[i].pageX);
-        let posY = scaleByPixelRatio(touches[i].pageY);
+        if (!pointer) continue;
+        let posX = scaleByPixelRatio(touches[i].clientX);
+        let posY = scaleByPixelRatio(touches[i].clientY);
 
-        // Touch harekete başladığında down flag'i set et
         if (!pointer.down) {
             pointer.down = true;
             pointer.texcoordX = posX / canvas.width;
@@ -1528,7 +1526,7 @@ canvas.addEventListener('touchmove', e => {
 
         updatePointerMoveData(pointer, posX, posY);
     }
-}, false);
+}, { passive: true });
 
 window.addEventListener('touchend', e => {
     const touches = e.changedTouches;

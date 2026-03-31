@@ -34,8 +34,7 @@ FinansAsistan/
 ├── bootstrap/
 │   ├── init.sql             # PostgreSQL schema başlangıç
 │   └── 001_initial_schema.sql  # Migration script (prod'da da yüklenir)
-├── docker-compose.dev.yml   # Geliştirme ortamı
-├── docker-compose.prod.yml  # Production (+ cloudflared servis)
+├── docker-compose.yml       # Production deploy (postgres + backend + frontend + cloudflared)
 └── .env                     # Ortam değişkenleri
 ```
 
@@ -44,15 +43,15 @@ FinansAsistan/
 ### Geliştirme
 
 ```bash
-# Tüm stack'i başlat (postgres + backend + frontend)
-docker-compose -f docker-compose.dev.yml up -d
+# Tüm stack'i başlat (postgres + backend + frontend + cloudflared)
+docker-compose up -d
 
 # Logları takip et
-docker-compose -f docker-compose.dev.yml logs -f backend
-docker-compose -f docker-compose.dev.yml logs -f frontend
+docker-compose logs -f backend
+docker-compose logs -f frontend
 
 # Backend'i yeniden başlat (kod değişikliği sonrası nodemon otomatik yapar)
-docker-compose -f docker-compose.dev.yml restart backend
+docker-compose restart backend
 ```
 
 ### Backend (back/)
@@ -63,8 +62,8 @@ npm install
 npm run dev        # nodemon ile hot-reload
 npm start          # production modu
 
-# Testler
-npm test                    # Jest + coverage
+# Testler (back/tests/ dizini oluşturulduğunda aktif olur)
+npm test                    # Jest + coverage (min %70 threshold)
 npm run test:unit           # tests/unit/
 npm run test:integration    # tests/integration/
 npm run test:e2e            # tests/e2e/
@@ -77,7 +76,7 @@ npm run test:watch          # watch modu
 cd front
 npm install
 npm start          # webpack-dev-server (port 9999)
-npm run build      # production bundle
+npm run build      # production bundle (fluid-sim.js de dist/'e kopyalanır)
 ```
 
 ### Production Deploy
@@ -85,13 +84,13 @@ npm run build      # production bundle
 ```bash
 # 1. .env dosyasını ayarla
 # 2. Deploy:
-docker-compose -f docker-compose.prod.yml up -d --build
+docker-compose up -d --build
 ```
 
 ## Mimari Notlar
 
 ### Auth Akışı
-JWT tabanlı. Token `Authorization: Bearer <token>` header'ında taşınır. `authMiddleware.js` token'ı doğrular; süresi 1 saatten az kaldıysa `New-Token` response header'ı ile yeniler. Süresi dolmuş token'lar yenilenmez — yeni giriş gerekir.
+JWT tabanlı. Token `Authorization: Bearer <token>` header'ında taşınır. Token ömrü **24 saat**. `authMiddleware.js` token'ı doğrular; süresi 1 saatten az kaldıysa `New-Token` response header'ı ile yeniler (`Access-Control-Expose-Headers: New-Token` de eklenir). Süresi dolmuş token'lar yenilenmez — `TOKEN_EXPIRED` kodu ile 401 döner, yeni giriş gerekir. Her istekte kullanıcının DB'de hala var olup olmadığı da kontrol edilir (`USER_DELETED`).
 
 ### Veritabanı Erişimi
 `back/config/db.js` bir pg Pool yönetir. Her yerde doğrudan `pool.query()` değil, `query()` ve `transaction()` helper'ları kullanılır; bu helper'lar otomatik Prometheus metriklerini kaydeder.
@@ -102,7 +101,10 @@ DB credentials öncelik sırası: `POSTGRES_*` env var → `DB_*` env var. Hiçb
 `KAFKA_ENABLED=false` ile tamamen devre dışı bırakılır (dev compose'da varsayılan). Aktifken event'ler `domain.entity.action` formatında topic'lere publish edilir. Kafka bağlantısı başarısız olsa bile backend başlar.
 
 ### Frontend Stack
-React Native Web üzerine kurulu — `react-native` bileşenleri web'de çalışır. Webpack ile bundle edilir. API URL'si `REACT_APP_API_URL` env var ile ayarlanır (dev: `http://localhost:5000`).
+React Native Web üzerine kurulu — `react-native` bileşenleri web'de çalışır. Webpack ile bundle edilir. API URL'si `REACT_APP_API_URL` env var ile ayarlanır (dev: `http://localhost:5000`). Production build'de console log'ları Babel plugin ile otomatik kaldırılır (`babel-plugin-transform-remove-console`).
+
+### Rate Limiting
+`express-rate-limit` + `rate-limit-redis` ile Redis destekli rate limiting var. Kritik endpoint'lerde (login, kayıt) uygulanır.
 
 ### Cloudflare Tunnel (Production)
 `cloudflared` container'ı `CLOUDFLARE_TUNNEL_TOKEN` ile Cloudflare'e tünel açar; `www.finansasistan.com` bu tünel üzerinden yönlendirilir. Makine değişse bile domain aynı kalır.
@@ -122,6 +124,7 @@ SMTP_SSL=
 APP_URL=
 CLOUDFLARE_TUNNEL_TOKEN=   # Sadece production
 KAFKA_ENABLED=false        # Kafka'yı devre dışı bırakmak için
+CORS_ORIGINS=              # Virgülle ayrılmış izinli origin'ler (varsayılan: finansasistan.com, www.finansasistan.com)
 ```
 
 ## API Endpoint'leri
@@ -140,13 +143,15 @@ KAFKA_ENABLED=false        # Kafka'yı devre dışı bırakmak için
 | `GET/POST/PUT/DELETE /api/istek` | İstekler |
 | `GET/POST/PUT/DELETE /api/hatirlatma` | Hatırlatmalar |
 | `GET/POST/PUT/DELETE /api/yetki` | Yetkiler |
+| `GET/POST/PUT/DELETE /api/admin` | Admin paneli |
 | `GET /health` | Sağlık kontrolü (DB durumu) |
+| `GET /ready` | Kubernetes readiness probe |
 | `GET /metrics` | Prometheus metrikleri |
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **FinansAsistan** (562 symbols, 1409 relationships, 44 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **FinansAsistan** (508 symbols, 1215 relationships, 39 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
