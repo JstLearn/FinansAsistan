@@ -1095,6 +1095,10 @@
 
         /* Mobile: root div'i viewport'u tamamen kaplasın */
         @media (max-width: 768px) {
+            html, body {
+                overscroll-behavior: none !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
             html > body > #root {
                 position: fixed !important;
                 top: 0 !important;
@@ -1104,6 +1108,17 @@
                 width: 100% !important;
                 height: 100% !important;
                 z-index: 1 !important;
+                overscroll-behavior: none !important;
+                -webkit-overflow-scrolling: touch !important;
+                touch-action: pan-y !important;
+                overflow-y: scroll !important;
+            }
+            /* Butonlarda basili kalma sorununu coz */
+            button, [role="button"], a, .TouchableOpacity, .TouchableHighlight {
+                -webkit-tap-highlight-color: transparent !important;
+                touch-action: manipulation !important;
+                -webkit-user-select: none !important;
+                user-select: none !important;
             }
         }
     </style>
@@ -1122,8 +1137,10 @@
                     if (root && root.firstChild) {
                         var container = root.firstChild;
                         container.style.height = window.innerHeight + "px";
-                        container.style.overflowY = "auto";
+                        container.style.overflowY = "scroll";
                         container.style.WebkitOverflowScrolling = "touch";
+                        container.style.overscrollBehavior = "none";
+                        container.style.touchAction = "pan-y";
                     }
                 }
             }

@@ -1,11 +1,32 @@
 // front/components/Buttons/SubButton.js
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { TouchableOpacity, Text } from 'react-native';
 import styles from '../../styles/styles';
 
 const SubButton = ({ onPress, title, style }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
+  const pressTimeoutRef = useRef(null);
+
+  const clearPressTimeout = () => {
+    if (pressTimeoutRef.current) {
+      clearTimeout(pressTimeoutRef.current);
+      pressTimeoutRef.current = null;
+    }
+  };
+
+  const handlePressIn = () => {
+    setIsPressed(true);
+    clearPressTimeout();
+    pressTimeoutRef.current = setTimeout(() => {
+      setIsPressed(false);
+    }, 300);
+  };
+
+  const handlePressOut = () => {
+    clearPressTimeout();
+    setIsPressed(false);
+  };
 
   const getButtonStyle = () => {
     if (isPressed) {
@@ -21,8 +42,8 @@ const SubButton = ({ onPress, title, style }) => {
     if (isHovered) {
       return {
         transform: [{ translateY: -5 }, { scale: 1.03 }],
-        boxShadow: `0 18px 40px rgba(108,117,125,0.4), 
-                    0 8px 20px rgba(0,0,0,0.3), 
+        boxShadow: `0 18px 40px rgba(108,117,125,0.4),
+                    0 8px 20px rgba(0,0,0,0.3),
                     0 0 30px rgba(108,117,125,0.15),
                     inset 0 2px 6px rgba(73,80,87,0.3)`,
         backgroundColor: '#495057',
@@ -35,11 +56,12 @@ const SubButton = ({ onPress, title, style }) => {
   };
 
   return (
-    <TouchableOpacity 
-      style={[styles.subButton, style, getButtonStyle()]} 
+    <TouchableOpacity
+      style={[styles.subButton, style, getButtonStyle()]}
       onPress={onPress}
-      onPressIn={() => setIsPressed(true)}
-      onPressOut={() => setIsPressed(false)}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPressCancel={handlePressOut}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       activeOpacity={0.8}

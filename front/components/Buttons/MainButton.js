@@ -1,11 +1,32 @@
 // front/components/Buttons/MainButton.js
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { TouchableOpacity, Text } from 'react-native';
 import styles from '../../styles/styles';
 
 const MainButton = ({ title, onPress, style, textStyle }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
+  const pressTimeoutRef = useRef(null);
+
+  const clearPressTimeout = () => {
+    if (pressTimeoutRef.current) {
+      clearTimeout(pressTimeoutRef.current);
+      pressTimeoutRef.current = null;
+    }
+  };
+
+  const handlePressIn = () => {
+    setIsPressed(true);
+    clearPressTimeout();
+    pressTimeoutRef.current = setTimeout(() => {
+      setIsPressed(false);
+    }, 300);
+  };
+
+  const handlePressOut = () => {
+    clearPressTimeout();
+    setIsPressed(false);
+  };
 
   const getButtonStyle = () => {
     if (isPressed) {
@@ -21,8 +42,8 @@ const MainButton = ({ title, onPress, style, textStyle }) => {
     if (isHovered) {
       return {
         transform: [{ translateY: -8 }, { scale: 1.05 }],
-        boxShadow: `0 30px 60px rgba(0,123,255,0.4), 
-                    0 15px 30px rgba(0,123,255,0.3), 
+        boxShadow: `0 30px 60px rgba(0,123,255,0.4),
+                    0 15px 30px rgba(0,123,255,0.3),
                     0 0 50px rgba(0,123,255,0.2),
                     inset 0 2px 8px rgba(0,86,179,0.25)`,
         backgroundColor: '#0056b3',
@@ -35,11 +56,12 @@ const MainButton = ({ title, onPress, style, textStyle }) => {
   };
 
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[styles.mainButton, style, getButtonStyle()]}
       onPress={onPress}
-      onPressIn={() => setIsPressed(true)}
-      onPressOut={() => setIsPressed(false)}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPressCancel={handlePressOut}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       activeOpacity={0.8}
