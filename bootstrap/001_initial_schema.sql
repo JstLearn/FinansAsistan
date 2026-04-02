@@ -87,8 +87,39 @@ CREATE TABLE IF NOT EXISTS yetkiler (
     yetkili_kullanici VARCHAR(150) NOT NULL,
     yetki_turu VARCHAR(50),
     aktif BOOLEAN DEFAULT TRUE,
-    tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    varlik_ekleme BOOLEAN DEFAULT FALSE,
+    varlik_silme BOOLEAN DEFAULT FALSE,
+    varlik_duzenleme BOOLEAN DEFAULT FALSE,
+    gelir_ekleme BOOLEAN DEFAULT FALSE,
+    gelir_silme BOOLEAN DEFAULT FALSE,
+    gelir_duzenleme BOOLEAN DEFAULT FALSE,
+    harcama_borc_ekleme BOOLEAN DEFAULT FALSE,
+    harcama_borc_silme BOOLEAN DEFAULT FALSE,
+    harcama_borc_duzenleme BOOLEAN DEFAULT FALSE,
+    istek_ekleme BOOLEAN DEFAULT FALSE,
+    istek_silme BOOLEAN DEFAULT FALSE,
+    istek_duzenleme BOOLEAN DEFAULT FALSE,
+    hatirlatma_ekleme BOOLEAN DEFAULT FALSE,
+    hatirlatma_silme BOOLEAN DEFAULT FALSE,
+    hatirlatma_duzenleme BOOLEAN DEFAULT FALSE
 );
+-- Migration: boolean yetki kolonları (mevcut tablolara ekle)
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS varlik_ekleme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS varlik_silme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS varlik_duzenleme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS gelir_ekleme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS gelir_silme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS gelir_duzenleme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS harcama_borc_ekleme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS harcama_borc_silme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS harcama_borc_duzenleme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS istek_ekleme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS istek_silme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS istek_duzenleme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS hatirlatma_ekleme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS hatirlatma_silme BOOLEAN DEFAULT FALSE;
+ALTER TABLE yetkiler ADD COLUMN IF NOT EXISTS hatirlatma_duzenleme BOOLEAN DEFAULT FALSE;
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_kullanicilar_kullanici ON kullanicilar(kullanici);

@@ -4,7 +4,7 @@ import { useUser } from '../context/UserContext';
 import { GLOBAL_FONT_FAMILY } from '../styles/styles';
 
 const UserInfo = ({ onLogout, onOpenYetkiModal, isModalOpen, onCloseModal }) => {
-    const { user, logout } = useUser();
+    const { user, logout, activeAccount, returnToOwnAccount } = useUser();
     const [isVisible, setIsVisible] = useState(true);
     const [lastScrollY, setLastScrollY] = useState(0);
     const [isLogoutHovered, setIsLogoutHovered] = useState(false);
@@ -115,8 +115,18 @@ const UserInfo = ({ onLogout, onOpenYetkiModal, isModalOpen, onCloseModal }) => 
                 transform: [{ translateY: isVisible ? 0 : -150 }]
             }
         ]}>
+            {activeAccount && (
+                <TouchableOpacity
+                    onPress={returnToOwnAccount}
+                    activeOpacity={0.7}
+                    style={styles.activeAccountBadge}
+                >
+                    <Text style={styles.activeAccountText} numberOfLines={1}>{activeAccount.username}</Text>
+                    <Text style={styles.activeAccountClose}>✕</Text>
+                </TouchableOpacity>
+            )}
             <TouchableOpacity onPress={handleUsernameClick} activeOpacity={0.7}>
-                <Text style={styles.email} numberOfLines={1}>{user.username}</Text>
+                <Text style={[styles.email, activeAccount && styles.emailDimmed]} numberOfLines={1}>{user.username}</Text>
             </TouchableOpacity>
             <TouchableOpacity
                 onPress={toggleFluidSimulation}
@@ -232,6 +242,38 @@ const styles = StyleSheet.create({
         fontSize: '12px',
         fontWeight: '500',
         whiteSpace: 'nowrap'
+    },
+    activeAccountBadge: {
+        backgroundColor: 'rgba(255, 193, 7, 0.15)',
+        borderRadius: '8px',
+        borderWidth: '1px',
+        borderStyle: 'solid',
+        borderColor: 'rgba(255, 193, 7, 0.6)',
+        paddingHorizontal: '8px',
+        paddingVertical: '3px',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: '4px',
+        flexShrink: 1,
+        maxWidth: '120px',
+    },
+    activeAccountText: {
+        fontFamily: GLOBAL_FONT_FAMILY,
+        color: 'rgba(255, 193, 7, 0.95)',
+        fontSize: '11px',
+        fontWeight: '600',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+    },
+    activeAccountClose: {
+        fontFamily: GLOBAL_FONT_FAMILY,
+        color: 'rgba(255, 193, 7, 0.6)',
+        fontSize: '9px',
+    },
+    emailDimmed: {
+        color: 'rgba(255,255,255,0.45)',
+        fontSize: '10px',
     }
 });
 

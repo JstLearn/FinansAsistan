@@ -51,7 +51,7 @@ const AppContent = () => {
   const [tableAnimationKey, setTableAnimationKey] = useState(0);
   const [isYetkiModalVisible, setYetkiModalVisible] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
-  const { user, setUser } = useUser();
+  const { user, setUser, activeAccount } = useUser();
 
   // E-posta doğrulama + Admin panel (URL ?admin=1)
   useEffect(() => {
@@ -1476,6 +1476,11 @@ const AppContent = () => {
     setCurrentAction('');
     resetAllStates(); // Ana ekrana dönmek için tüm state'leri sıfırla
   };
+
+  // Hesap değişince açık UI'yi sıfırla
+  useEffect(() => {
+    resetAllStates();
+  }, [activeAccount]);
 
   const resetAllStates = () => {
     setIsMainButtonsSmall(false);  // Ana butonları büyük göster

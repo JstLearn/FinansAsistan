@@ -64,13 +64,47 @@ const authMiddleware = async (req, res, next) => {
             const tokenExp = decoded.exp * 1000;
             const now = Date.now();
             const timeUntilExp = tokenExp - now;
-            
+
             if (timeUntilExp < 3600000 && timeUntilExp > 0) {
                 const newToken = createNewToken(req.user);
                 res.setHeader('New-Token', newToken);
                 res.setHeader('Access-Control-Expose-Headers', 'New-Token');
             }
-            
+
+            // Aktif hesap kontrolü: başka birinin hesabında işlem yapılıyor mu?
+            const activeAccountHeader = req.headers['x-active-account'];
+            if (activeAccountHeader && activeAccountHeader !== decoded.username) {
+                const targetUser = await query(
+                    'SELECT id, username FROM kullanicilar WHERE username = $1 AND onaylandi = TRUE',
+                    [activeAccountHeader]
+                );
+                if (targetUser.rows.length === 0) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'Hedef hesap bulunamadı',
+                        code: 'TARGET_USER_NOT_FOUND'
+                    });
+                }
+                const yetkiResult = await query(
+                    'SELECT * FROM yetkiler WHERE yetki_veren_kullanici = $1 AND yetkili_kullanici = $2',
+                    [activeAccountHeader, decoded.username]
+                );
+                if (yetkiResult.rows.length === 0) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'Bu hesaba erişim yetkiniz yok',
+                        code: 'UNAUTHORIZED_ACCOUNT_SWITCH'
+                    });
+                }
+                req.activeAccount = {
+                    username: activeAccountHeader,
+                    id: targetUser.rows[0].id,
+                    yetki: yetkiResult.rows[0]
+                };
+            } else {
+                req.activeAccount = { username: decoded.username, id: decoded.id, yetki: null };
+            }
+
             next();
         } catch (verifyError) {
             // Token expired veya geçersiz - YENİ TOKEN OLUŞTURMA, sadece hata döndür

@@ -64,6 +64,18 @@ const getHeaders = () => {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  try {
+    const activeAccountRaw = localStorage.getItem('activeAccount');
+    if (activeAccountRaw) {
+      const activeAccount = JSON.parse(activeAccountRaw);
+      if (activeAccount?.username) {
+        headers['X-Active-Account'] = activeAccount.username;
+      }
+    }
+  } catch (e) {
+    // localStorage parse hatası yok sayılır
+  }
+
   return headers;
 };
 
@@ -84,6 +96,15 @@ const makeRequest = async (url, options) => {
         removeToken();
         window.dispatchEvent(new Event('auth:session-expired'));
         throw new Error('Oturum süresi doldu. Lütfen tekrar giriş yapın.');
+      }
+
+      if (response.status === 403) {
+        const errData = await response.json().catch(() => ({}));
+        if (errData.code === 'UNAUTHORIZED_ACCOUNT_SWITCH') {
+          localStorage.removeItem('activeAccount');
+          window.dispatchEvent(new Event('account:permission-revoked'));
+        }
+        throw new Error(errData.message || 'Bu işlem için yetkiniz yok.');
       }
 
       const errorData = await response.json();

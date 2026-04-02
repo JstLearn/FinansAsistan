@@ -4,12 +4,17 @@ const UserContext = createContext();
 
 export const UserProvider = ({ children }) => {
     const [user, setUser] = useState(() => {
-        // Sayfa yüklendiğinde localStorage'dan kullanıcı bilgisini al
         const savedUser = localStorage.getItem('user');
         return savedUser ? JSON.parse(savedUser) : null;
     });
 
-    // Kullanıcı bilgisi değiştiğinde localStorage'a kaydet
+    const [activeAccount, setActiveAccount] = useState(() => {
+        try {
+            const saved = localStorage.getItem('activeAccount');
+            return saved ? JSON.parse(saved) : null;
+        } catch { return null; }
+    });
+
     useEffect(() => {
         if (user) {
             localStorage.setItem('user', JSON.stringify(user));
@@ -18,10 +23,31 @@ export const UserProvider = ({ children }) => {
         }
     }, [user]);
 
+    useEffect(() => {
+        if (activeAccount) {
+            localStorage.setItem('activeAccount', JSON.stringify(activeAccount));
+        } else {
+            localStorage.removeItem('activeAccount');
+        }
+    }, [activeAccount]);
+
     const logout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('activeAccount');
         setUser(null);
+        setActiveAccount(null);
+    };
+
+    const switchAccount = (yetki) => {
+        setActiveAccount({
+            username: yetki.yetki_veren_kullanici,
+            yetki: yetki
+        });
+    };
+
+    const returnToOwnAccount = () => {
+        setActiveAccount(null);
     };
 
     useEffect(() => {
@@ -30,8 +56,14 @@ export const UserProvider = ({ children }) => {
         return () => window.removeEventListener('auth:session-expired', handleSessionExpired);
     }, []);
 
+    useEffect(() => {
+        const handlePermissionRevoked = () => returnToOwnAccount();
+        window.addEventListener('account:permission-revoked', handlePermissionRevoked);
+        return () => window.removeEventListener('account:permission-revoked', handlePermissionRevoked);
+    }, []);
+
     return (
-        <UserContext.Provider value={{ user, setUser, logout }}>
+        <UserContext.Provider value={{ user, setUser, logout, activeAccount, switchAccount, returnToOwnAccount }}>
             {children}
         </UserContext.Provider>
     );
@@ -43,4 +75,4 @@ export const useUser = () => {
         throw new Error('useUser hook\'u UserProvider içinde kullanılmalıdır');
     }
     return context;
-}; 
+};

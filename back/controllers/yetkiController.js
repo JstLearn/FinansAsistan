@@ -80,86 +80,81 @@ const addYetki = async (req, res) => {
     try {
         const {
             yetkili_kullanici,
-            varlik_ekleme = false,
-            gelir_ekleme = false,
-            harcama_borc_ekleme = false,
-            istek_ekleme = false,
-            hatirlatma_ekleme = false
+            varlik_ekleme = false, varlit_silme = false, varlik_duzenleme = false,
+            gelir_ekleme = false, gelir_silme = false, gelir_duzenleme = false,
+            harcama_borc_ekleme = false, harcama_borc_silme = false, harcama_borc_duzenleme = false,
+            istek_ekleme = false, istek_silme = false, istek_duzenleme = false,
+            hatirlatma_ekleme = false, hatirlatma_silme = false, hatirlatma_duzenleme = false
         } = req.body;
 
         const yetki_veren_kullanici = req.user.username;
 
-        // En az bir yetki seçilmeli
-        if (!varlik_ekleme && !gelir_ekleme && !harcama_borc_ekleme && !istek_ekleme && !hatirlatma_ekleme) {
-            return res.status(400).json({
-                success: false,
-                error: 'En az bir yetki türü seçmelisiniz'
-            });
-        }
+        const anyYetki = varlik_ekleme || varlit_silme || varlik_duzenleme ||
+            gelir_ekleme || gelir_silme || gelir_duzenleme ||
+            harcama_borc_ekleme || harcama_borc_silme || harcama_borc_duzenleme ||
+            istek_ekleme || istek_silme || istek_duzenleme ||
+            hatirlatma_ekleme || hatirlatma_silme || hatirlatma_duzenleme;
 
-        // Kendine yetki veremez
+        if (!anyYetki) {
+            return res.status(400).json({ success: false, error: 'En az bir yetki seçmelisiniz' });
+        }
         if (yetki_veren_kullanici === yetkili_kullanici) {
-            return res.status(400).json({
-                success: false,
-                error: 'Kendinize yetki veremezsiniz'
-            });
+            return res.status(400).json({ success: false, error: 'Kendinize yetki veremezsiniz' });
         }
 
-        // Aynı kullanıcı için yetki var mı kontrol et
         const existingCheck = await query(
             'SELECT * FROM yetkiler WHERE yetki_veren_kullanici = $1 AND yetkili_kullanici = $2',
             [yetki_veren_kullanici, yetkili_kullanici]
         );
 
         if (existingCheck.rows.length > 0) {
-            // Varsa güncelle
             await query(`
-                UPDATE yetkiler
-                SET varlik_ekleme = $1,
-                    gelir_ekleme = $2,
-                    harcama_borc_ekleme = $3,
-                    istek_ekleme = $4,
-                    hatirlatma_ekleme = $5,
+                UPDATE yetkiler SET
+                    varlik_ekleme = $1, varlit_silme = $2, varlik_duzenleme = $3,
+                    gelir_ekleme = $4, gelir_silme = $5, gelir_duzenleme = $6,
+                    harcama_borc_ekleme = $7, harcama_borc_silme = $8, harcama_borc_duzenleme = $9,
+                    istek_ekleme = $10, istek_silme = $11, istek_duzenleme = $12,
+                    hatirlatma_ekleme = $13, hatirlatma_silme = $14, hatirlatma_duzenleme = $15,
                     aktif = TRUE
-                WHERE yetki_veren_kullanici = $6 AND yetkili_kullanici = $7
-            `, [varlik_ekleme, gelir_ekleme, harcama_borc_ekleme, istek_ekleme, hatirlatma_ekleme,
+                WHERE yetki_veren_kullanici = $16 AND yetkili_kullanici = $17
+            `, [varlik_ekleme, varlit_silme, varlik_duzenleme,
+                gelir_ekleme, gelir_silme, gelir_duzenleme,
+                harcama_borc_ekleme, harcama_borc_silme, harcama_borc_duzenleme,
+                istek_ekleme, istek_silme, istek_duzenleme,
+                hatirlatma_ekleme, hatirlatma_silme, hatirlatma_duzenleme,
                 yetki_veren_kullanici, yetkili_kullanici]);
 
-            res.status(200).json({
-                success: true,
-                message: 'Yetki başarıyla güncellendi'
-            });
+            res.status(200).json({ success: true, message: 'Yetki başarıyla güncellendi' });
         } else {
-            // Yoksa yeni ekle
             await query(`
                 INSERT INTO yetkiler (
-                    yetki_veren_kullanici, yetkili_kullanici, 
-                    varlik_ekleme, gelir_ekleme, harcama_borc_ekleme, istek_ekleme, hatirlatma_ekleme
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    yetki_veren_kullanici, yetkili_kullanici,
+                    varlik_ekleme, varlit_silme, varlik_duzenleme,
+                    gelir_ekleme, gelir_silme, gelir_duzenleme,
+                    harcama_borc_ekleme, harcama_borc_silme, harcama_borc_duzenleme,
+                    istek_ekleme, istek_silme, istek_duzenleme,
+                    hatirlatma_ekleme, hatirlatma_silme, hatirlatma_duzenleme
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             `, [yetki_veren_kullanici, yetkili_kullanici,
-                varlik_ekleme, gelir_ekleme, harcama_borc_ekleme, istek_ekleme, hatirlatma_ekleme]);
+                varlik_ekleme, varlit_silme, varlik_duzenleme,
+                gelir_ekleme, gelir_silme, gelir_duzenleme,
+                harcama_borc_ekleme, harcama_borc_silme, harcama_borc_duzenleme,
+                istek_ekleme, istek_silme, istek_duzenleme,
+                hatirlatma_ekleme, hatirlatma_silme, hatirlatma_duzenleme]);
 
-            // Bilgilendirme maili gönder
             await sendAuthorizationEmail(yetki_veren_kullanici, yetkili_kullanici, {
-                varlik_ekleme,
-                gelir_ekleme,
-                harcama_borc_ekleme,
-                istek_ekleme,
-                hatirlatma_ekleme
+                varlik_ekleme, varlit_silme, varlik_duzenleme,
+                gelir_ekleme, gelir_silme, gelir_duzenleme,
+                harcama_borc_ekleme, harcama_borc_silme, harcama_borc_duzenleme,
+                istek_ekleme, istek_silme, istek_duzenleme,
+                hatirlatma_ekleme, hatirlatma_silme, hatirlatma_duzenleme
             });
 
-            res.status(201).json({
-                success: true,
-                message: 'Yetki başarıyla eklendi ve bilgilendirme maili gönderildi'
-            });
+            res.status(201).json({ success: true, message: 'Yetki başarıyla eklendi' });
         }
     } catch (error) {
         console.error('Yetki ekleme hatası:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Yetki eklenirken bir hata oluştu'
-        });
+        res.status(500).json({ success: false, error: error.message || 'Yetki eklenirken bir hata oluştu' });
     }
 };
 
@@ -263,61 +258,55 @@ const updateYetki = async (req, res) => {
     try {
         const { id } = req.params;
         const {
-            varlik_ekleme = false,
-            gelir_ekleme = false,
-            harcama_borc_ekleme = false,
-            istek_ekleme = false,
-            hatirlatma_ekleme = false,
+            varlik_ekleme = false, varlit_silme = false, varlik_duzenleme = false,
+            gelir_ekleme = false, gelir_silme = false, gelir_duzenleme = false,
+            harcama_borc_ekleme = false, harcama_borc_silme = false, harcama_borc_duzenleme = false,
+            istek_ekleme = false, istek_silme = false, istek_duzenleme = false,
+            hatirlatma_ekleme = false, hatirlatma_silme = false, hatirlatma_duzenleme = false,
             aktif = true
         } = req.body;
 
         const yetki_veren_kullanici = req.user.username;
 
-        // Yetki kaydının yetki veren kullanıcıya ait olduğunu kontrol et
         const checkResult = await query(
             'SELECT * FROM yetkiler WHERE id = $1 AND yetki_veren_kullanici = $2',
             [id, yetki_veren_kullanici]
         );
 
         if (checkResult.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'Yetki kaydı bulunamadı veya yetkiniz yok'
-            });
+            return res.status(404).json({ success: false, error: 'Yetki kaydı bulunamadı veya yetkiniz yok' });
         }
 
         const yetkiliEmail = checkResult.rows[0].yetkili_kullanici;
 
         await query(`
-            UPDATE yetkiler
-            SET varlik_ekleme = $1,
-                gelir_ekleme = $2,
-                harcama_borc_ekleme = $3,
-                istek_ekleme = $4,
-                hatirlatma_ekleme = $5,
-                aktif = $6
-            WHERE id = $7
-        `, [varlik_ekleme, gelir_ekleme, harcama_borc_ekleme, istek_ekleme, hatirlatma_ekleme, aktif, id]);
+            UPDATE yetkiler SET
+                varlik_ekleme = $1, varlit_silme = $2, varlik_duzenleme = $3,
+                gelir_ekleme = $4, gelir_silme = $5, gelir_duzenleme = $6,
+                harcama_borc_ekleme = $7, harcama_borc_silme = $8, harcama_borc_duzenleme = $9,
+                istek_ekleme = $10, istek_silme = $11, istek_duzenleme = $12,
+                hatirlatma_ekleme = $13, hatirlatma_silme = $14, hatirlatma_duzenleme = $15,
+                aktif = $16
+            WHERE id = $17
+        `, [varlik_ekleme, varlit_silme, varlik_duzenleme,
+            gelir_ekleme, gelir_silme, gelir_duzenleme,
+            harcama_borc_ekleme, harcama_borc_silme, harcama_borc_duzenleme,
+            istek_ekleme, istek_silme, istek_duzenleme,
+            hatirlatma_ekleme, hatirlatma_silme, hatirlatma_duzenleme,
+            aktif, id]);
 
-        // Güncelleme için de bilgilendirme maili gönder
         await sendAuthorizationEmail(yetki_veren_kullanici, yetkiliEmail, {
-            varlik_ekleme,
-            gelir_ekleme,
-            harcama_borc_ekleme,
-            istek_ekleme,
-            hatirlatma_ekleme
+            varlik_ekleme, varlit_silme, varlik_duzenleme,
+            gelir_ekleme, gelir_silme, gelir_duzenleme,
+            harcama_borc_ekleme, harcama_borc_silme, harcama_borc_duzenleme,
+            istek_ekleme, istek_silme, istek_duzenleme,
+            hatirlatma_ekleme, hatirlatma_silme, hatirlatma_duzenleme
         });
 
-        res.status(200).json({
-            success: true,
-            message: 'Yetki başarıyla güncellendi ve bilgilendirme maili gönderildi'
-        });
+        res.status(200).json({ success: true, message: 'Yetki başarıyla güncellendi' });
     } catch (error) {
         console.error('Yetki güncelleme hatası:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Yetki güncellenirken bir hata oluştu'
-        });
+        res.status(500).json({ success: false, error: error.message || 'Yetki güncellenirken bir hata oluştu' });
     }
 };
 
