@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Image, TouchableOpacity, StyleSheet } from 'react-native';
 
-const Logo = ({ onReset }) => {
+const Logo = ({ onReset, isModalOpen, onCloseModal }) => {
     const [isVisible, setIsVisible] = useState(true);
     const [lastScrollY, setLastScrollY] = useState(0);
     const [isHovered, setIsHovered] = useState(false);
@@ -25,6 +25,10 @@ const Logo = ({ onReset }) => {
     }, [lastScrollY]);
 
     const handlePress = () => {
+        if (isModalOpen && onCloseModal) {
+            onCloseModal();
+            return;
+        }
         if (onReset) {
             onReset();
             window.scrollTo(0, 0);

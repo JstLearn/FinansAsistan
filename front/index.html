@@ -1093,8 +1093,8 @@
             display: none !important;
         }
 
-        /* Mobile: root div'i viewport'u tamamen kaplasın */
-        @media (max-width: 768px) {
+        /* Mobile + Tablet: root div'i viewport'u tamamen kaplasın */
+        @media (max-width: 1366px), (pointer: coarse) {
             html, body {
                 overscroll-behavior: none !important;
                 -webkit-overflow-scrolling: touch !important;
@@ -1132,7 +1132,7 @@
         // Mobile'da ekrani tam kaplamasini sagla
         (function() {
             function fixMobileHeight() {
-                if (window.innerWidth <= 768) {
+                if (window.innerWidth <= 1366 || window.matchMedia('(pointer: coarse)').matches) {
                     var root = document.getElementById("root");
                     if (root && root.firstChild) {
                         var container = root.firstChild;

@@ -190,15 +190,9 @@ const addKullanici = async (req, res) => {
 
                     await getTransporter().sendMail(mailOptions);
                     console.log('✅ Doğrulama maili gönderildi:', kullanici);
-                    if (process.env.NODE_ENV === 'development') {
-                        console.log('📧 Development Mode - Yeni Doğrulama Kodu:', verificationCode);
-                    }
                 } catch (emailError) {
                     console.error('❌ Email gönderilemedi:', emailError.message);
                     console.error('Email Error Details:', emailError);
-                    if (process.env.NODE_ENV === 'development') {
-                        console.log('📧 Development Mode - Yeni Doğrulama Kodu (Email gönderilemedi):', verificationCode);
-                    }
                 }
 
                 return res.json({
@@ -217,16 +211,13 @@ const addKullanici = async (req, res) => {
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(sifre, saltRounds);
 
-        // Development modunda email doğrulaması olmadan direkt onaylanmış kullanıcı oluştur
-        const isDevelopment = process.env.NODE_ENV === 'development';
-        
         // Yeni kullanıcıyı kaydet
         const insertResult = await query(`
             INSERT INTO kullanicilar
             (kullanici, sifre, verification_token, onaylandi)
             VALUES ($1, $2, $3, $4)
             RETURNING id, tarih
-        `, [kullanici, hashedPassword, verificationCode, isDevelopment ? true : false]);
+        `, [kullanici, hashedPassword, verificationCode, false]);
 
         const userId = insertResult.rows[0].id;
 
@@ -235,7 +226,7 @@ const addKullanici = async (req, res) => {
         publishEventAsync(USER_TOPICS.REGISTERED, {
             id: userId,
             kullanici,
-            onaylandi: isDevelopment,
+            onaylandi: false,
             tarih: insertResult.rows[0].tarih
         }, {
             correlationId: req.correlationId || req.id,
@@ -254,23 +245,14 @@ const addKullanici = async (req, res) => {
 
             await getTransporter().sendMail(mailOptions);
             console.log('✅ Doğrulama maili gönderildi:', kullanici);
-            if (isDevelopment) {
-                console.log('📧 Development Mode - Doğrulama Kodu:', verificationCode);
-            }
         } catch (emailError) {
             console.error('❌ Email gönderilemedi:', emailError.message);
             console.error('Email Error Details:', emailError);
-            // Development modunda email hatası olsa bile devam et
-            if (isDevelopment) {
-                console.log('📧 Development Mode - Doğrulama Kodu (Email gönderilemedi):', verificationCode);
-            }
         }
 
         res.json({
             success: true,
-            message: isDevelopment 
-                ? `✅ Kullanıcı başarıyla oluşturuldu ve onaylandı (Development Mode)`
-                : 'Doğrulama kodu e-posta adresinize gönderildi.'
+            message: 'Doğrulama kodu e-posta adresinize gönderildi.'
         });
     } catch (err) {
         console.error('❌ Kullanıcı ekleme hatası:', err);
@@ -324,7 +306,7 @@ const verifyEmail = async (req, res) => {
                 id: result.rows[0].id
             };
 
-            const token = jwt.sign(tokenData, getJwtSecret(), { expiresIn: '24h' });
+            const token = jwt.sign(tokenData, getJwtSecret(), { expiresIn: '7d' });
 
             // Başarılı doğrulamadan sonra deneme sayısını sıfırla
             verificationAttempts.delete(email);
@@ -405,7 +387,7 @@ const validateKullanici = async (req, res) => {
             id: user.id
         };
 
-        const token = jwt.sign(tokenData, getJwtSecret(), { expiresIn: '24h' });
+        const token = jwt.sign(tokenData, getJwtSecret(), { expiresIn: '7d' });
 
         // ✅ Kafka event publish - User Logged In
         publishEventAsync(USER_TOPICS.LOGGED_IN, {

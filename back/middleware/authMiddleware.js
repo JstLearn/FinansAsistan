@@ -21,7 +21,7 @@ const createNewToken = (user) => {
     return jwt.sign(
         { username: user.username, id: user.id },
         getJwtSecret(),
-        { expiresIn: '24h' }
+        { expiresIn: '7d' }
     );
 };
 

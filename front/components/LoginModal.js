@@ -113,9 +113,6 @@ const LoginModal = ({ visible, onClose, onSuccess }) => {
       }
       return isValid;
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Kod kontrolü hatası:', error);
-      }
       setIsValidCode(false);
       setError('Doğrulama sırasında bir hata oluştu');
       return false;
@@ -218,10 +215,6 @@ const LoginModal = ({ visible, onClose, onSuccess }) => {
       }
 
       // Önce giriş dene
-      if (process.env.NODE_ENV === 'development') {
-        console.log('İstek gönderiliyor:', `${API_BASE_URL}/api/kullanicilar/validate`);
-      }
-      
       const loginResponse = await fetch(`${API_BASE_URL}/api/kullanicilar/validate`, {
         method: 'POST',
         headers: {
@@ -234,9 +227,6 @@ const LoginModal = ({ visible, onClose, onSuccess }) => {
       });
       
       const loginData = await loginResponse.json();
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Giriş yanıtı:', loginData);
-      }
 
       if (loginData.success) {
         // Giriş başarılı
@@ -253,10 +243,6 @@ const LoginModal = ({ visible, onClose, onSuccess }) => {
         }
       } else {
         // Giriş başarısız, otomatik kayıt yap
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Giriş başarısız, kayıt yapılıyor...');
-        }
-        
         const registerResponse = await fetch(`${API_BASE_URL}/api/kullanicilar`, {
           method: 'POST',
           headers: {
@@ -269,9 +255,6 @@ const LoginModal = ({ visible, onClose, onSuccess }) => {
         });
         
         const registerData = await registerResponse.json();
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Kayıt yanıtı:', registerData);
-        }
 
         if (registerData.success) {
           if (registerData.message.includes('Yeni doğrulama kodu')) {
@@ -285,9 +268,6 @@ const LoginModal = ({ visible, onClose, onSuccess }) => {
         }
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Hata:', error);
-      }
       setError('Sunucu bağlantısı başarısız oldu. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.');
     } finally {
       setLoading(false);
@@ -356,9 +336,6 @@ const LoginModal = ({ visible, onClose, onSuccess }) => {
         setError(data.message);
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Parola sıfırlama hatası:', error);
-      }
       setError('Parola sıfırlama işlemi sırasında bir hata oluştu');
     } finally {
       setLoading(false);
@@ -434,9 +411,6 @@ const LoginModal = ({ visible, onClose, onSuccess }) => {
         setError(data.message);
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Parola güncelleme hatası:', error);
-      }
       setError('Parola güncellenirken bir hata oluştu');
     } finally {
       setLoading(false);

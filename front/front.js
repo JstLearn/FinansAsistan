@@ -446,9 +446,7 @@ const AppContent = () => {
         setSelectOptionsData(prev => ({ ...prev, gelir: gelirResponse.data }));
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Gelir-Alacak verileri çekilemedi:', error);
-      }
+      // Gelir-Alacak verileri çekilemedi
     }
 
     // İlk başta tüm field'ları göster
@@ -615,9 +613,7 @@ const AppContent = () => {
         setSelectOptionsData(prev => ({ ...prev, gider: giderResponse.data }));
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Gider verileri çekilemedi:', error);
-      }
+      // Gider verileri çekilemedi
     }
 
     // İlk başta tüm field'ları göster
@@ -1339,9 +1335,6 @@ const AppContent = () => {
         showAlert('Uyarı', response?.message || 'Veri eklenirken bir hata oluştu.', null, false);
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Form gönderme hatası:', error);
-      }
       showAlert('Uyarı', 'Veri eklenirken bir hata oluştu. Lütfen tekrar deneyin.', null, false);
     }
   };
@@ -1364,9 +1357,6 @@ const AppContent = () => {
         throw new Error('Geçersiz veri formatı');
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Varlık verileri çekilirken hata:', error);
-      }
       showAlert('Hata', 'Varlık verileri çekilirken hata oluştu: ' + error.message);
     }
   };
@@ -1386,9 +1376,6 @@ const AppContent = () => {
         throw new Error('Geçersiz veri formatı');
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Harcama-Borç verileri çekilirken hata:', error);
-      }
       showAlert('Hata', 'Harcama-Borç verileri çekilirken hata oluştu: ' + error.message);
     }
   };
@@ -1408,9 +1395,6 @@ const AppContent = () => {
         throw new Error('Geçersiz veri formatı');
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Gelir-Alacak verileri çekilirken hata:', error);
-      }
       showAlert('Hata', 'Gelir-Alacak verileri çekilirken hata oluştu: ' + error.message);
     }
   };
@@ -1430,9 +1414,6 @@ const AppContent = () => {
         throw new Error('Geçersiz veri formatı');
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Gider verileri çekilirken hata:', error);
-      }
       showAlert('Hata', 'Gider verileri çekilirken hata oluştu: ' + error.message);
     }
   };
@@ -1452,9 +1433,6 @@ const AppContent = () => {
         throw new Error('Geçersiz veri formatı');
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('İstek verileri çekilirken hata:', error);
-      }
       showAlert('Hata', 'İstek verileri çekilirken hata oluştu: ' + error.message);
     }
   };
@@ -1474,9 +1452,6 @@ const AppContent = () => {
         throw new Error('Geçersiz veri formatı');
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Hatırlatma verileri çekilirken hata:', error);
-      }
       showAlert('Hata', 'Hatırlatma verileri çekilirken hata oluştu: ' + error.message);
     }
   };
@@ -1564,6 +1539,9 @@ const AppContent = () => {
       setMainButtonsAnimationKey(prev => prev + 1);
     }
 
+    // Yetki modalı açıksa kapat
+    setYetkiModalVisible(false);
+
     // Sayfayı en üste kaydır
     window.scrollTo(0, 0);
   };
@@ -1585,8 +1563,8 @@ const AppContent = () => {
         paddingRight: '8px',
         zIndex: 10002,
       }}>
-        <Logo onReset={handleLogoClick} />
-        <UserInfo onLogout={resetAllStates} onOpenYetkiModal={() => setYetkiModalVisible(true)} />
+        <Logo onReset={handleLogoClick} isModalOpen={isYetkiModalVisible} onCloseModal={() => setYetkiModalVisible(false)} />
+        <UserInfo onLogout={resetAllStates} onOpenYetkiModal={() => setYetkiModalVisible(true)} isModalOpen={isYetkiModalVisible} onCloseModal={() => setYetkiModalVisible(false)} />
       </View>
       <YetkiModal
         visible={isYetkiModalVisible}

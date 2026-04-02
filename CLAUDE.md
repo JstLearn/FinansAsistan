@@ -16,7 +16,7 @@ FinansAsistan/
 │   ├── controllers/         # İş mantığı (gelirAlacak, gider, harcamaBorc, varlik, istek, hatirlatma, kullanici, yetki)
 │   ├── routes/              # Express router tanımları
 │   ├── middleware/          # auth (JWT), errorHandler, metricsMiddleware (Prometheus)
-│   ├── models/              # Veri modelleri
+│   ├── models/              # DB sorgu wrapper'ları (her tablo için ince JS sınıfı)
 │   ├── services/
 │   │   ├── kafka/           # KafkaJS producer (opsiyonel, KAFKA_ENABLED=false ile devre dışı)
 │   │   ├── email/           # Nodemailer e-posta servisi
@@ -25,15 +25,19 @@ FinansAsistan/
 │   └── utils/               # logger (Winston), emailTemplates
 ├── front/                   # React frontend (port 9999 dev, 80 prod)
 │   ├── index.web.js         # Web entry point (AppRegistry)
-│   ├── front.js             # Ana App bileşeni
-│   ├── src/components/      # LoginModal, diğer bileşenler
-│   ├── components/          # Buttons, Forms, Tables, Common
+│   ├── front.js             # Ana App bileşeni (tek büyük stateful bileşen)
+│   ├── components/          # Ana UI bileşenleri (Buttons, Forms, Tables, Modal, Header, LoginModal, AdminDashboard, FluidSimulation)
+│   ├── src/components/      # Yalnızca LoginModal — bu dizin artık kullanılmıyor, components/ kullan
+│   ├── fluid-sim.js         # WebGL parçacık arka plan animasyonu (ayrı bundle olarak derlenir)
+│   ├── styles/styles.js     # Global stil tanımları (React Native StyleSheet)
 │   ├── context/             # UserContext (auth state)
-│   ├── services/api.js      # Axios API çağrıları
+│   ├── services/api.js      # Fetch API çağrıları (Axios değil)
 │   └── webpack.config.js    # Webpack bundle yapılandırması
 ├── bootstrap/
 │   ├── init.sql             # PostgreSQL schema başlangıç
 │   └── 001_initial_schema.sql  # Migration script (prod'da da yüklenir)
+├── data/                    # Docker postgres volume (read-only, git'e dahil değil)
+├── plans/                   # Uygulama planları (implementation plans)
 ├── docker-compose.yml       # Production deploy (postgres + backend + frontend + cloudflared)
 └── .env                     # Ortam değişkenleri
 ```
@@ -75,8 +79,11 @@ npm run test:watch          # watch modu
 ```bash
 cd front
 npm install
-npm start          # webpack-dev-server (port 9999)
+npm start          # webpack-dev-server (port 9999) — npm run web ile aynı
 npm run build      # production bundle (fluid-sim.js de dist/'e kopyalanır)
+
+# fluid-sim debug testi (port 8000'de çalışan bir sunucu gerekir)
+npx playwright test --config playwright-debug.config.js
 ```
 
 ### Production Deploy
@@ -90,7 +97,7 @@ docker-compose up -d --build
 ## Mimari Notlar
 
 ### Auth Akışı
-JWT tabanlı. Token `Authorization: Bearer <token>` header'ında taşınır. Token ömrü **24 saat**. `authMiddleware.js` token'ı doğrular; süresi 1 saatten az kaldıysa `New-Token` response header'ı ile yeniler (`Access-Control-Expose-Headers: New-Token` de eklenir). Süresi dolmuş token'lar yenilenmez — `TOKEN_EXPIRED` kodu ile 401 döner, yeni giriş gerekir. Her istekte kullanıcının DB'de hala var olup olmadığı da kontrol edilir (`USER_DELETED`).
+JWT tabanlı. Token `Authorization: Bearer <token>` header'ında taşınır. Token ömrü **7 gün**. `authMiddleware.js` token'ı doğrular; süresi 1 saatten az kaldıysa `New-Token` response header'ı ile yeniler (`Access-Control-Expose-Headers: New-Token` de eklenir). Süresi dolmuş token'lar yenilenmez — `TOKEN_EXPIRED` kodu ile 401 döner, yeni giriş gerekir. Her istekte kullanıcının DB'de hala var olup olmadığı da kontrol edilir (`USER_DELETED`).
 
 ### Veritabanı Erişimi
 `back/config/db.js` bir pg Pool yönetir. Her yerde doğrudan `pool.query()` değil, `query()` ve `transaction()` helper'ları kullanılır; bu helper'lar otomatik Prometheus metriklerini kaydeder.
@@ -105,6 +112,17 @@ React Native Web üzerine kurulu — `react-native` bileşenleri web'de çalış
 
 ### Rate Limiting
 `express-rate-limit` + `rate-limit-redis` ile Redis destekli rate limiting var. Kritik endpoint'lerde (login, kayıt) uygulanır.
+
+Login ve e-posta doğrulama için ek olarak `kullaniciController.js` içinde **in-memory Map tabanlı** rate limiting vardır (5 deneme / 5 dakika login, 5 deneme / 1 dakika verification). Bu limiter process restart'ta sıfırlanır — multi-instance deploy durumunda dikkat.
+
+### Development Modu
+`NODE_ENV=development` olduğunda yeni kayıt olan kullanıcılar e-posta doğrulaması olmadan otomatik olarak `onaylandi = true` şeklinde oluşturulur. Doğrulama kodu console'a da basılır.
+
+### Yetki (Paylaşım) Sistemi
+Kullanıcılar varlık/gelir/gider verilerini başka kullanıcılarla paylaşabilir. `yetkiController.js` bir kullanıcı yetki talep ettiğinde hedef kullanıcıya e-posta gönderir; onay/red e-posta linki üzerinden yapılır. `yetki` tablosu izin verilen kullanıcı çiftlerini tutar. `authMiddleware` her istekte yetkili kullanıcı listesini de req'e ekler.
+
+### Admin Paneli
+`?admin=1` URL parametresiyle gizli admin dashboard'u açılır. Production'da bu route ayrıca güvenlik kontrolüne tabi tutulmalıdır. `AdminDashboard.js` bileşeni tüm kullanıcıları/işlemleri yönetir.
 
 ### Cloudflare Tunnel (Production)
 `cloudflared` container'ı `CLOUDFLARE_TUNNEL_TOKEN` ile Cloudflare'e tünel açar; `www.finansasistan.com` bu tünel üzerinden yönlendirilir. Makine değişse bile domain aynı kalır.

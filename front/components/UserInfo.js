@@ -3,12 +3,13 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useUser } from '../context/UserContext';
 import { GLOBAL_FONT_FAMILY } from '../styles/styles';
 
-const UserInfo = ({ onLogout, onOpenYetkiModal }) => {
+const UserInfo = ({ onLogout, onOpenYetkiModal, isModalOpen, onCloseModal }) => {
     const { user, logout } = useUser();
     const [isVisible, setIsVisible] = useState(true);
     const [lastScrollY, setLastScrollY] = useState(0);
     const [isLogoutHovered, setIsLogoutHovered] = useState(false);
     const [isLogoutPressed, setIsLogoutPressed] = useState(false);
+    const [hoverReady, setHoverReady] = useState(false);
     const [fluidEnabled, setFluidEnabled] = useState(() => {
         if (typeof window !== 'undefined') {
             return localStorage.getItem('fluidEnabled') !== 'false';
@@ -35,6 +36,16 @@ const UserInfo = ({ onLogout, onOpenYetkiModal }) => {
     }, []);
 
     useEffect(() => {
+        if (user) {
+            setIsLogoutHovered(false);
+            setIsLogoutPressed(false);
+            setHoverReady(false);
+            const t = setTimeout(() => setHoverReady(true), 400);
+            return () => clearTimeout(t);
+        }
+    }, [user]);
+
+    useEffect(() => {
         const handleScroll = () => {
             const currentScrollY = window.scrollY;
 
@@ -59,14 +70,18 @@ const UserInfo = ({ onLogout, onOpenYetkiModal }) => {
     };
 
     const handleUsernameClick = () => {
-        if (onOpenYetkiModal) {
+        if (isModalOpen && onCloseModal) {
+            onCloseModal();
+        } else if (onOpenYetkiModal) {
             onOpenYetkiModal();
         }
     };
 
     const getLogoutButtonStyle = () => {
+        const transition = hoverReady ? 'all 0.3s ease' : 'none';
         if (isLogoutPressed) {
             return {
+                transition,
                 transform: [{ translateY: 0 }, { scale: 1 }],
                 boxShadow: '0 3px 10px rgba(0,0,0,0.3), inset 0 3px 8px rgba(167,29,42,0.6)',
                 backgroundColor: '#a71d2a',
@@ -77,6 +92,7 @@ const UserInfo = ({ onLogout, onOpenYetkiModal }) => {
         }
         if (isLogoutHovered) {
             return {
+                transition,
                 transform: [{ translateY: -3 }, { scale: 1.08 }],
                 backgroundColor: '#dc3545',
                 boxShadow: `0 10px 28px rgba(255,59,48,0.4),
@@ -88,7 +104,7 @@ const UserInfo = ({ onLogout, onOpenYetkiModal }) => {
                 overflow: 'hidden',
             };
         }
-        return {};
+        return { transition };
     };
 
     return (
@@ -129,7 +145,7 @@ const UserInfo = ({ onLogout, onOpenYetkiModal }) => {
                 onPress={handleLogout}
                 onPressIn={() => setIsLogoutPressed(true)}
                 onPressOut={() => setIsLogoutPressed(false)}
-                onMouseEnter={() => setIsLogoutHovered(true)}
+                onMouseEnter={() => { if (hoverReady) setIsLogoutHovered(true); }}
                 onMouseLeave={() => setIsLogoutHovered(false)}
                 activeOpacity={0.8}
             >
@@ -142,7 +158,11 @@ const UserInfo = ({ onLogout, onOpenYetkiModal }) => {
 const styles = StyleSheet.create({
     container: {
         backgroundColor: 'rgba(0, 123, 255, 0.15)',
-        padding: '6px 10px',
+        paddingTop: 6,
+        paddingBottom: 6,
+        paddingLeft: 10,
+        paddingRight: 10,
+        minHeight: 52,
         borderRadius: '16px',
         borderWidth: '1px',
         borderStyle: 'solid',
@@ -200,7 +220,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderStyle: 'solid',
         borderColor: 'rgba(255,107,95,0.3)',
-        transition: 'all 0.3s ease',
         boxShadow: `0 2px 8px rgba(255,59,48,0.3),
                     0 1px 3px rgba(0,0,0,0.25),
                     inset 0 -1px 3px rgba(200,35,51,0.5),

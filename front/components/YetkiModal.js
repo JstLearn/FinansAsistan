@@ -182,12 +182,15 @@ const YetkiModal = ({ visible, onClose }) => {
                     position: 'fixed',
                     top: 0,
                     left: 0,
-                    width: '100vw',
-                    height: '100vh',
+                    right: 0,
+                    bottom: 0,
                     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    zIndex: 10004
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 10004,
+                    padding: '16px',
+                    boxSizing: 'border-box',
                 }}
                 onClick={onClose}
             >
@@ -196,13 +199,14 @@ const YetkiModal = ({ visible, onClose }) => {
                         backgroundColor: 'rgba(30, 40, 50, 0.98)',
                         border: '1px solid rgba(0, 123, 255, 0.5)',
                         borderRadius: '16px',
-                        padding: '24px',
+                        padding: 'clamp(12px, 4vw, 24px)',
                         maxWidth: '600px',
-                        width: '90%',
+                        width: '100%',
                         maxHeight: '80vh',
                         overflow: 'auto',
                         boxShadow: '0 8px 32px rgba(0, 123, 255, 0.3)',
-                        fontFamily: GLOBAL_FONT_FAMILY
+                        fontFamily: GLOBAL_FONT_FAMILY,
+                        boxSizing: 'border-box',
                     }}
                     onClick={(e) => e.stopPropagation()}
                 >
@@ -226,7 +230,11 @@ const YetkiModal = ({ visible, onClose }) => {
                         </h3>
 
                         <input
-                            type="email"
+                            type="text"
+                            autoComplete="off"
+                            data-lpignore="true"
+                            data-1p-ignore="true"
+                            data-bwignore="true"
                             placeholder="Yetki vermek istediğiniz maili girin"
                             value={yetkiliEmail}
                             onChange={(e) => setYetkiliEmail(e.target.value)}
@@ -508,11 +516,12 @@ const YetkiModal = ({ visible, onClose }) => {
                             backgroundColor: 'rgba(30, 40, 50, 0.98)',
                             border: '1px solid rgba(255, 193, 7, 0.5)',
                             borderRadius: '16px',
-                            padding: '24px',
+                            padding: 'clamp(12px, 4vw, 24px)',
                             maxWidth: '450px',
-                            width: '90%',
+                            width: '100%',
                             boxShadow: '0 8px 32px rgba(255, 193, 7, 0.3)',
-                            fontFamily: GLOBAL_FONT_FAMILY
+                            fontFamily: GLOBAL_FONT_FAMILY,
+                            boxSizing: 'border-box',
                         }}
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -558,7 +567,11 @@ const YetkiModal = ({ visible, onClose }) => {
                         </div>
 
                         <input
-                            type="email"
+                            type="text"
+                            autoComplete="off"
+                            data-lpignore="true"
+                            data-1p-ignore="true"
+                            data-bwignore="true"
                             placeholder="Yetkiyi aktarmak istediğiniz kullanıcının maili"
                             value={delegateEmail}
                             onChange={(e) => setDelegateEmail(e.target.value)}
@@ -649,7 +662,9 @@ const YetkiModal = ({ visible, onClose }) => {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        zIndex: 10006
+                        zIndex: 10006,
+                        padding: '16px',
+                        boxSizing: 'border-box',
                     }}
                     onClick={() => setShowDeleteConfirm(false)}
                 >
@@ -660,6 +675,9 @@ const YetkiModal = ({ visible, onClose }) => {
                             borderRadius: '16px',
                             padding: '24px',
                             maxWidth: '400px',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            padding: 'clamp(12px, 4vw, 24px)',
                             boxShadow: '0 8px 32px rgba(220, 53, 69, 0.3)',
                             fontFamily: GLOBAL_FONT_FAMILY
                         }}
