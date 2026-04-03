@@ -32,9 +32,6 @@ const YetkiModal = ({ visible, onClose }) => {
     const [alertMessage, setAlertMessage] = useState('');
     const [alertCallback, setAlertCallback] = useState(null);
     const [isSuccess, setIsSuccess] = useState(true);
-    const [showDelegateModal, setShowDelegateModal] = useState(false);
-    const [delegateYetki, setDelegateYetki] = useState(null);
-    const [delegateEmail, setDelegateEmail] = useState('');
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteYetkiId, setDeleteYetkiId] = useState(null);
 
@@ -66,6 +63,21 @@ const YetkiModal = ({ visible, onClose }) => {
             loadGrantedToMeList();
         }
     }, [visible]);
+
+    // Modal açıkken dışarı tıklanınca kapat
+    useEffect(() => {
+        if (!visible) return;
+
+        const handleClickOutside = (e) => {
+            const modalContent = document.getElementById('yetki-modal-content');
+            if (modalContent && !modalContent.contains(e.target)) {
+                onClose();
+            }
+        };
+
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, [visible, onClose]);
 
     const showAlert = (title, message, callback = null, success = true) => {
         setAlertTitle(title);
@@ -141,6 +153,17 @@ const YetkiModal = ({ visible, onClose }) => {
         }
     };
 
+    const selectAllYetkiler = (select) => {
+        const allTrue = {
+            varlik_ekleme: select, varlik_silme: select, varlik_duzenleme: select,
+            gelir_ekleme: select, gelir_silme: select, gelir_duzenleme: select,
+            harcama_borc_ekleme: select, harcama_borc_silme: select, harcama_borc_duzenleme: select,
+            istek_ekleme: select, istek_silme: select, istek_duzenleme: select,
+            hatirlatma_ekleme: select, hatirlatma_silme: select, hatirlatma_duzenleme: select
+        };
+        setInlineSelectedYetkiler(allTrue);
+    };
+
     const handleNewYetkiClick = () => {
         setIsNewYetki(true);
         setNewYetkiEmail('');
@@ -190,40 +213,6 @@ const YetkiModal = ({ visible, onClose }) => {
         }
     };
 
-    const handleDelegateYetki = (yetki) => {
-        setDelegateYetki(yetki);
-        setDelegateEmail('');
-        setShowDelegateModal(true);
-    };
-
-    const confirmDelegateYetki = async () => {
-        if (!delegateEmail || !delegateEmail.includes('@')) {
-            showAlert('Uyarı', 'Geçerli bir email adresi giriniz', null, false);
-            return;
-        }
-
-        try {
-            const data = {
-                yetkili_kullanici: delegateEmail,
-                varlik_ekleme: delegateYetki.varlik_ekleme,
-                gelir_ekleme: delegateYetki.gelir_ekleme,
-                harcama_borc_ekleme: delegateYetki.harcama_borc_ekleme,
-                istek_ekleme: delegateYetki.istek_ekleme,
-                hatirlatma_ekleme: delegateYetki.hatirlatma_ekleme
-            };
-
-            await postData('yetki', data);
-            setShowDelegateModal(false);
-            setDelegateYetki(null);
-            setDelegateEmail('');
-            await loadYetkiList();
-            showAlert('Başarılı', 'Yetki başarıyla devredildi ve bilgilendirme maili gönderildi!', null, true);
-        } catch (error) {
-            console.error('Yetki devretme hatası:', error);
-            showAlert('Hata', 'Yetki devredilirken bir hata oluştu: ' + error.message, null, false);
-        }
-    };
-
     if (!visible) return null;
 
     return (
@@ -244,9 +233,9 @@ const YetkiModal = ({ visible, onClose }) => {
                     padding: '16px',
                     boxSizing: 'border-box',
                 }}
-                onClick={onClose}
             >
                 <div
+                    id="yetki-modal-content"
                     style={{
                         backgroundColor: 'rgba(30, 40, 50, 0.98)',
                         border: '1px solid rgba(0, 123, 255, 0.5)',
@@ -329,6 +318,18 @@ const YetkiModal = ({ visible, onClose }) => {
 
                                         {inlineEditingId === yetki.id ? (
                                             <div style={{ marginTop: '8px' }}>
+                                                {/* Tümü Checkbox */}
+                                                <div style={{ marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid rgba(0,123,255,0.2)' }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'rgba(0,123,255,0.9)', fontSize: '12px', fontWeight: 'bold' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={inlineSelectedYetkiler.varlik_ekleme && inlineSelectedYetkiler.varlik_silme && inlineSelectedYetkiler.varlik_duzenleme && inlineSelectedYetkiler.gelir_ekleme && inlineSelectedYetkiler.gelir_silme && inlineSelectedYetkiler.gelir_duzenleme && inlineSelectedYetkiler.harcama_borc_ekleme && inlineSelectedYetkiler.harcama_borc_silme && inlineSelectedYetkiler.harcama_borc_duzenleme && inlineSelectedYetkiler.istek_ekleme && inlineSelectedYetkiler.istek_silme && inlineSelectedYetkiler.istek_duzenleme && inlineSelectedYetkiler.hatirlatma_ekleme && inlineSelectedYetkiler.hatirlatma_silme && inlineSelectedYetkiler.hatirlatma_duzenleme}
+                                                            onChange={(e) => selectAllYetkiler(e.target.checked)}
+                                                            style={{ width: '14px', height: '14px', cursor: 'pointer' }}
+                                                        />
+                                                        Tümü
+                                                    </label>
+                                                </div>
                                                 {[
                                                     { kategori: 'Varlık', ekle: 'varlik_ekleme', sil: 'varlik_silme', duzenle: 'varlik_duzenleme' },
                                                     { kategori: 'Gelir', ekle: 'gelir_ekleme', sil: 'gelir_silme', duzenle: 'gelir_duzenleme' },
@@ -410,6 +411,18 @@ const YetkiModal = ({ visible, onClose }) => {
                                             boxSizing: 'border-box'
                                         }}
                                     />
+                                    {/* Tümü Checkbox */}
+                                    <div style={{ marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid rgba(0,123,255,0.2)' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'rgba(0,123,255,0.9)', fontSize: '12px', fontWeight: 'bold' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={inlineSelectedYetkiler.varlik_ekleme && inlineSelectedYetkiler.varlik_silme && inlineSelectedYetkiler.varlik_duzenleme && inlineSelectedYetkiler.gelir_ekleme && inlineSelectedYetkiler.gelir_silme && inlineSelectedYetkiler.gelir_duzenleme && inlineSelectedYetkiler.harcama_borc_ekleme && inlineSelectedYetkiler.harcama_borc_silme && inlineSelectedYetkiler.harcama_borc_duzenleme && inlineSelectedYetkiler.istek_ekleme && inlineSelectedYetkiler.istek_silme && inlineSelectedYetkiler.istek_duzenleme && inlineSelectedYetkiler.hatirlatma_ekleme && inlineSelectedYetkiler.hatirlatma_silme && inlineSelectedYetkiler.hatirlatma_duzenleme}
+                                                onChange={(e) => selectAllYetkiler(e.target.checked)}
+                                                style={{ width: '14px', height: '14px', cursor: 'pointer' }}
+                                            />
+                                            Tümü
+                                        </label>
+                                    </div>
                                     {[
                                         { kategori: 'Varlık', ekle: 'varlik_ekleme', sil: 'varlik_silme', duzenle: 'varlik_duzenleme' },
                                         { kategori: 'Gelir', ekle: 'gelir_ekleme', sil: 'gelir_silme', duzenle: 'gelir_duzenleme' },
@@ -491,21 +504,6 @@ const YetkiModal = ({ visible, onClose }) => {
                                             <strong style={{ color: 'rgba(40, 167, 69, 0.95)', fontSize: '12px' }}>
                                                 {yetki.yetki_veren_kullanici}
                                             </strong>
-                                            <button
-                                                onClick={() => handleDelegateYetki(yetki)}
-                                                style={{
-                                                    padding: '2px 8px',
-                                                    borderRadius: '4px',
-                                                    border: '1px solid rgba(255, 193, 7, 0.4)',
-                                                    backgroundColor: 'rgba(255, 193, 7, 0.2)',
-                                                    color: 'rgba(255, 193, 7, 0.9)',
-                                                    fontSize: '10px',
-                                                    cursor: 'pointer',
-                                                    whiteSpace: 'nowrap'
-                                                }}
-                                            >
-                                                Başkasına Ekle
-                                            </button>
                                         </div>
                                         <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '10px' }}>
                                             {[
@@ -560,161 +558,6 @@ const YetkiModal = ({ visible, onClose }) => {
                     </button>
                 </div>
             </div>
-
-            {/* Başkasına Ekle Modalı */}
-            {showDelegateModal && delegateYetki && (
-                <div
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 10005
-                    }}
-                    onClick={() => setShowDelegateModal(false)}
-                >
-                    <div
-                        style={{
-                            backgroundColor: 'rgba(30, 40, 50, 0.98)',
-                            border: '1px solid rgba(255, 193, 7, 0.5)',
-                            borderRadius: '16px',
-                            padding: 'clamp(12px, 4vw, 24px)',
-                            maxWidth: '450px',
-                            width: '100%',
-                            boxShadow: '0 8px 32px rgba(255, 193, 7, 0.3)',
-                            fontFamily: GLOBAL_FONT_FAMILY,
-                            boxSizing: 'border-box',
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <h3 style={{
-                            color: 'rgba(255, 193, 7, 0.95)',
-                            fontSize: 'clamp(16px, 3vw, 20px)',
-                            marginBottom: '12px',
-                            textAlign: 'center',
-                            fontWeight: 'bold'
-                        }}>
-                            Yetkiyi Başkasına Aktar
-                        </h3>
-                        <p style={{
-                            color: 'rgba(255, 255, 255, 0.8)',
-                            fontSize: 'clamp(13px, 2.5vw, 15px)',
-                            marginBottom: '16px',
-                            textAlign: 'center'
-                        }}>
-                            <strong style={{ color: 'rgba(40, 167, 69, 0.95)' }}>
-                                {delegateYetki.yetki_veren_kullanici}
-                            </strong> tarafından size verilen yetkiyi başka bir kullanıcıya aktarmak üzeresiniz.
-                        </p>
-
-                        <div style={{
-                            backgroundColor: 'rgba(255, 193, 7, 0.1)',
-                            border: '1px solid rgba(255, 193, 7, 0.3)',
-                            borderRadius: '8px',
-                            padding: '12px',
-                            marginBottom: '16px'
-                        }}>
-                            <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.9)', marginBottom: '4px' }}>
-                                <strong>Aktarılacak Yetkiler:</strong>
-                            </div>
-                            <div style={{ fontSize: '12px', color: 'rgba(255, 193, 7, 0.9)' }}>
-                                {[
-                                    delegateYetki.varlik_ekleme && 'Varlık Ekleme',
-                                    delegateYetki.gelir_ekleme && 'Gelir Ekleme',
-                                    delegateYetki.harcama_borc_ekleme && 'Harcama-Borç Ekleme',
-                                    delegateYetki.istek_ekleme && 'İstek Ekleme',
-                                    delegateYetki.hatirlatma_ekleme && 'Hatırlatma Ekleme'
-                                ].filter(Boolean).join(', ')}
-                            </div>
-                        </div>
-
-                        <input
-                            type="text"
-                            autoComplete="off"
-                            data-lpignore="true"
-                            data-1p-ignore="true"
-                            data-bwignore="true"
-                            placeholder="Yetkiyi aktarmak istediğiniz kullanıcının maili"
-                            value={delegateEmail}
-                            onChange={(e) => setDelegateEmail(e.target.value)}
-                            style={{
-                                width: '100%',
-                                padding: '12px',
-                                marginBottom: '16px',
-                                borderRadius: '8px',
-                                border: '1px solid rgba(255, 193, 7, 0.3)',
-                                backgroundColor: 'rgba(30, 40, 50, 0.95)',
-                                color: '#fff',
-                                fontFamily: GLOBAL_FONT_FAMILY,
-                                fontSize: '14px',
-                                outline: 'none',
-                                boxSizing: 'border-box'
-                            }}
-                        />
-
-                        <div style={{
-                            display: 'flex',
-                            gap: '12px',
-                            justifyContent: 'center'
-                        }}>
-                            <button
-                                onClick={confirmDelegateYetki}
-                                style={{
-                                    padding: '10px 24px',
-                                    borderRadius: '8px',
-                                    border: '1px solid rgba(255, 193, 7, 0.5)',
-                                    backgroundColor: 'rgba(255, 193, 7, 0.2)',
-                                    color: 'rgba(255, 193, 7, 0.95)',
-                                    fontFamily: GLOBAL_FONT_FAMILY,
-                                    fontSize: 'clamp(13px, 2.5vw, 15px)',
-                                    cursor: 'pointer',
-                                    fontWeight: 'bold',
-                                    transition: 'all 0.3s ease'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.target.style.backgroundColor = 'rgba(255, 193, 7, 0.3)';
-                                    e.target.style.transform = 'translateY(-2px)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.target.style.backgroundColor = 'rgba(255, 193, 7, 0.2)';
-                                    e.target.style.transform = 'translateY(0)';
-                                }}
-                            >
-                                Onayla ve Aktar
-                            </button>
-                            <button
-                                onClick={() => setShowDelegateModal(false)}
-                                style={{
-                                    padding: '10px 24px',
-                                    borderRadius: '8px',
-                                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                                    color: 'rgba(255, 255, 255, 0.9)',
-                                    fontFamily: GLOBAL_FONT_FAMILY,
-                                    fontSize: 'clamp(13px, 2.5vw, 15px)',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s ease'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
-                                    e.target.style.transform = 'translateY(-2px)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                                    e.target.style.transform = 'translateY(0)';
-                                }}
-                            >
-                                İptal
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Silme Onay Modalı */}
             {showDeleteConfirm && (

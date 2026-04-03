@@ -13,7 +13,7 @@ const addIstek = async (req, res) => {
             para_birimi
         } = req.body;
         
-        const kullanici = req.user.username;
+        const kullanici = req.activeAccount.username;
         const ekleyen_kullanici = req.user.username;
 
         const result = await transaction(async (client) => {
@@ -62,7 +62,7 @@ const getAllIstek = async (req, res) => {
                 id, ekleyen_kullanici, kategori, link, miktar, para_birimi, aciklama, oncelik
             FROM istekler 
             WHERE kullanici = $1
-        `, [req.user.username]);
+        `, [req.activeAccount.username]);
         
         res.status(200).json({
             success: true,
@@ -90,7 +90,7 @@ const updateIstek = async (req, res) => {
             para_birimi
         } = req.body;
         
-        const kullanici = req.user.username;
+        const kullanici = req.activeAccount.username;
 
         const result = await transaction(async (client) => {
             // Önce varlığı kontrol et
@@ -146,7 +146,7 @@ const updateIstek = async (req, res) => {
 const deleteIstek = async (req, res) => {
     try {
         const { id } = req.params;
-        const kullanici = req.user.username;
+        const kullanici = req.activeAccount.username;
 
         await transaction(async (client) => {
             // Önce varlığı kontrol et

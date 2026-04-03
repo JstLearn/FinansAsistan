@@ -178,6 +178,7 @@ const AppContent = () => {
 
   // Alt menü butonlarının işleyicileri
   const handleAddVarlik = () => {
+    if (isYetkiModalVisible) setYetkiModalVisible(false);
     setCurrentEndpoint('varlik');
     setFormTitle('Yeni Varlık Ekle');
     // FormData'yı temizle (önceki formdan kalan değerleri temizle)
@@ -426,6 +427,7 @@ const AppContent = () => {
   };
 
   const handleAddBorc = async () => {
+    if (isYetkiModalVisible) setYetkiModalVisible(false);
     setCurrentEndpoint('harcama-borc');
     setFormTitle('Yeni Harcama - Borç Ekle');
     // FormData ve Errors'ı temizle
@@ -593,6 +595,7 @@ const AppContent = () => {
   };
 
   const handleAddGelir = async () => {
+    if (isYetkiModalVisible) setYetkiModalVisible(false);
     setCurrentEndpoint('gelir-alacak');
     setFormTitle('Yeni Gelir - Alacak Ekle');
     // FormData ve Errors'ı temizle
@@ -771,6 +774,7 @@ const AppContent = () => {
   };
 
   const handleAddIstek = () => {
+    if (isYetkiModalVisible) setYetkiModalVisible(false);
     setCurrentEndpoint('istek');
     setFormTitle('Yeni İstek Ekle');
     // FormData'yı temizle (önceki formdan kalan değerleri temizle)
@@ -862,6 +866,7 @@ const AppContent = () => {
   };
 
   const handleAddHatirlatma = () => {
+    if (isYetkiModalVisible) setYetkiModalVisible(false);
     setCurrentEndpoint('hatirlatma');
     setFormTitle('Yeni Hatırlatma Ekle');
     // FormData ve Errors'ı temizle
@@ -1343,6 +1348,7 @@ const AppContent = () => {
   // Verileri Sorgulama (GET)
   // ---------------------------------------------------------
   const handleFetchVarlik = async () => {
+    if (isYetkiModalVisible) setYetkiModalVisible(false);
     try {
       setShowTable(false);
       setCurrentEndpoint('varlik'); // Endpoint'i set et
@@ -1362,6 +1368,7 @@ const AppContent = () => {
   };
 
   const handleFetchBorc = async () => {
+    if (isYetkiModalVisible) setYetkiModalVisible(false);
     try {
       setShowTable(false);
       setCurrentEndpoint('harcama-borc'); // Endpoint'i set et
@@ -1381,6 +1388,7 @@ const AppContent = () => {
   };
 
   const handleFetchGelir = async () => {
+    if (isYetkiModalVisible) setYetkiModalVisible(false);
     try {
       setShowTable(false);
       setCurrentEndpoint('gelir-alacak'); // Endpoint'i set et
@@ -1419,6 +1427,7 @@ const AppContent = () => {
   };
 
   const handleFetchIstek = async () => {
+    if (isYetkiModalVisible) setYetkiModalVisible(false);
     try {
       setShowTable(false);
       setCurrentEndpoint('istek'); // Endpoint'i set et
@@ -1438,6 +1447,7 @@ const AppContent = () => {
   };
 
   const handleFetchHatirlatma = async () => {
+    if (isYetkiModalVisible) setYetkiModalVisible(false);
     try {
       setShowTable(false);
       setCurrentEndpoint('hatirlatma'); // Endpoint'i set et
@@ -1457,6 +1467,11 @@ const AppContent = () => {
   };
 
   const handleActionClick = (action) => {
+    // Eğer YetkiModal açıksa, önce kapat
+    if (isYetkiModalVisible) {
+      setYetkiModalVisible(false);
+    }
+
     if (user) {
       // Kullanıcı giriş yapmışsa direkt işlemi başlat
       if (action === 'ekle') {
@@ -1633,7 +1648,7 @@ const AppContent = () => {
             key={`add-buttons-${subButtonsAnimationKey}`}
             className={isClosingSubButtons ? "sub-buttons-exit-left" : "sub-buttons-enter-left"}
           >
-            <View style={styles.glassCard}>
+            <View style={styles.glassCard} onClick={() => { if (isYetkiModalVisible) setYetkiModalVisible(false); }}>
               <Text style={styles.cardTitle}>Ne eklemek istersiniz?</Text>
               <View style={styles.flexRowWrap}>
                 <SubButton title="Varlık" onPress={handleAddVarlik} />
@@ -1652,7 +1667,7 @@ const AppContent = () => {
             key={`query-buttons-${subButtonsAnimationKey}`}
             className={isClosingSubButtons ? "sub-buttons-exit-right" : "sub-buttons-enter-right"}
           >
-            <View style={styles.glassCard}>
+            <View style={styles.glassCard} onClick={() => { if (isYetkiModalVisible) setYetkiModalVisible(false); }}>
               <Text style={styles.cardTitle}>Hangisini sorgulayacaksınız?</Text>
               <View style={styles.flexRowWrap}>
                 <SubButton title="Varlık" onPress={handleFetchVarlik} />

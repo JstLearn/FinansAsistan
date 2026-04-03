@@ -56,7 +56,7 @@ const addHarcamaBorc = async (req, res) => {
       });
     }
 
-    const kullanici = req.user.username;
+    const kullanici = req.activeAccount.username;
     const ekleyen_kullanici = req.user.username;
 
     // PostgreSQL ile veriyi ekle
@@ -137,7 +137,7 @@ const getAllHarcamaBorc = async (req, res) => {
       FROM harcama_borc 
       WHERE kullanici = $1
       ORDER BY odeme_tarihi DESC
-    `, [req.user.username]);
+    `, [req.activeAccount.username]);
 
     res.status(200).json({
       success: true,
@@ -199,7 +199,7 @@ const updateHarcamaBorc = async (req, res) => {
       });
     }
 
-    const kullanici = req.user.username;
+    const kullanici = req.activeAccount.username;
 
     // Check if record exists and belongs to user
     const checkResult = await query(
@@ -286,7 +286,7 @@ const updateHarcamaBorc = async (req, res) => {
 const deleteHarcamaBorc = async (req, res) => {
   try {
     const { id } = req.params;
-    const kullanici = req.user.username;
+    const kullanici = req.activeAccount.username;
 
     // Check if record exists and belongs to user
     const checkResult = await query(

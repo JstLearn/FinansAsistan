@@ -20,7 +20,8 @@ const addGider = async (req, res) => {
             bagimli_oldugu_gelir 
         } = req.body;
         
-        const kullanici = req.user.username;
+        const kullanici = req.activeAccount.username;
+        const ekleyen_kullanici = req.activeAccount.username;
 
         const result = await transaction(async (client) => {
             const insertResult = await client.query(`
@@ -31,7 +32,7 @@ const addGider = async (req, res) => {
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                 RETURNING id, tarih
-            `, [kullanici, kullanici, tutar, para_birimi,
+            `, [kullanici, ekleyen_kullanici, tutar, para_birimi,
                 odeme_tarihi, kalan_taksit, odendi_mi, talimat_varmi, faiz_binecekmi,
                 bagimli_oldugu_gelir, gider]);
             return insertResult.rows[0];
@@ -85,7 +86,7 @@ const getAllGider = async (req, res) => {
     try {
         const result = await query(
             'SELECT * FROM harcama_borc WHERE kullanici = $1',
-            [req.user.username]
+            [req.activeAccount.username]
         );
         
         res.status(200).json({

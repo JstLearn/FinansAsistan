@@ -52,7 +52,7 @@ const addGelirAlacak = async (req, res) => {
       });
     }
 
-    const kullanici = req.user.username;
+    const kullanici = req.activeAccount.username;
     const ekleyen_kullanici = req.user.username;
 
     const result = await transaction(async (client) => {
@@ -121,7 +121,7 @@ const getAllGelirAlacak = async (req, res) => {
         taksit, faiz_uygulaniyormu, alindi_mi, talimat_varmi, bagimli_oldugu_gider, aciklama
       FROM gelir_alacak 
       WHERE kullanici = $1
-    `, [req.user.username]);
+    `, [req.activeAccount.username]);
 
     res.status(200).json({
       success: true,
@@ -183,7 +183,7 @@ const updateGelirAlacak = async (req, res) => {
       });
     }
 
-    const kullanici = req.user.username;
+    const kullanici = req.activeAccount.username;
 
     const result = await transaction(async (client) => {
       // Önce varlığı kontrol et
@@ -257,7 +257,7 @@ const updateGelirAlacak = async (req, res) => {
 const deleteGelirAlacak = async (req, res) => {
   try {
     const { id } = req.params;
-    const kullanici = req.user.username;
+    const kullanici = req.activeAccount.username;
 
     const deletedRecord = await transaction(async (client) => {
       // Önce varlığı kontrol et

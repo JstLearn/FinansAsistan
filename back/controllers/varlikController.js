@@ -25,9 +25,9 @@ const addVarlik = async (req, res) => {
       aciklama = null
     } = req.body;
 
-    const kullanici = req.user.username;
+    const kullanici = req.activeAccount.username;
     const ekleyen_kullanici = req.user.username;
-    
+
     // PostgreSQL transaction ile varlık ekle
     const result = await transaction(async (client) => {
       const insertResult = await client.query(`
@@ -112,7 +112,7 @@ const getAllVarlik = async (req, res) => {
       FROM varliklar 
       WHERE kullanici = $1
       ORDER BY tarih DESC
-    `, [req.user.username]);
+    `, [req.activeAccount.username]);
 
     res.status(200).json({
       success: true,
@@ -144,7 +144,7 @@ const updateVarlik = async (req, res) => {
       aciklama = null
     } = req.body;
 
-    const kullanici = req.user.username;
+    const kullanici = req.activeAccount.username;
     
     // PostgreSQL transaction ile güncelle
     const result = await transaction(async (client) => {
@@ -245,7 +245,7 @@ const updateVarlik = async (req, res) => {
 const deleteVarlik = async (req, res) => {
   try {
     const { id } = req.params;
-    const kullanici = req.user.username;
+    const kullanici = req.activeAccount.username;
     
     // PostgreSQL transaction ile sil
     const deletedRecord = await transaction(async (client) => {

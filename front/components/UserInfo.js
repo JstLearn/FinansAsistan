@@ -115,7 +115,7 @@ const UserInfo = ({ onLogout, onOpenYetkiModal, isModalOpen, onCloseModal }) => 
                 transform: [{ translateY: isVisible ? 0 : -150 }]
             }
         ]}>
-            {activeAccount && (
+            {activeAccount ? (
                 <TouchableOpacity
                     onPress={returnToOwnAccount}
                     activeOpacity={0.7}
@@ -124,10 +124,11 @@ const UserInfo = ({ onLogout, onOpenYetkiModal, isModalOpen, onCloseModal }) => 
                     <Text style={styles.activeAccountText} numberOfLines={1}>{activeAccount.username}</Text>
                     <Text style={styles.activeAccountClose}>✕</Text>
                 </TouchableOpacity>
+            ) : (
+                <TouchableOpacity onPress={handleUsernameClick} activeOpacity={0.7}>
+                    <Text style={styles.email} numberOfLines={1}>{user.username}</Text>
+                </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={handleUsernameClick} activeOpacity={0.7}>
-                <Text style={[styles.email, activeAccount && styles.emailDimmed]} numberOfLines={1}>{user.username}</Text>
-            </TouchableOpacity>
             <TouchableOpacity
                 onPress={toggleFluidSimulation}
                 style={styles.fluidToggle}
@@ -196,8 +197,8 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         width: 'auto',
-        maxWidth: '120px',
-        flexShrink: 1,
+        maxWidth: 'none',
+        flexShrink: 0,
     },
     fluidToggle: {
         cursor: 'pointer',
@@ -254,8 +255,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: '4px',
-        flexShrink: 1,
-        maxWidth: '120px',
+        flexShrink: 0,
+        maxWidth: 'none',
     },
     activeAccountText: {
         fontFamily: GLOBAL_FONT_FAMILY,
@@ -263,8 +264,6 @@ const styles = StyleSheet.create({
         fontSize: '11px',
         fontWeight: '600',
         whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
     },
     activeAccountClose: {
         fontFamily: GLOBAL_FONT_FAMILY,
