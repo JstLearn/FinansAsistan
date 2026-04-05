@@ -21,6 +21,7 @@ services:
     restart: unless-stopped
     networks:
       - finans-net
+      - monitoring
 
   backend:
     build:
@@ -55,6 +56,7 @@ services:
     restart: unless-stopped
     networks:
       - finans-net
+      - monitoring
 
   frontend:
     build:
@@ -75,6 +77,7 @@ services:
     restart: unless-stopped
     networks:
       - finans-net
+      - monitoring
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -83,6 +86,7 @@ services:
     restart: unless-stopped
     networks:
       - finans-net
+      - monitoring
     depends_on:
       - frontend
       - backend
@@ -91,6 +95,8 @@ networks:
   finans-net:
     name: finans-network
     driver: bridge
+  monitoring:
+    external: true
 
 volumes:
   postgres_data:
